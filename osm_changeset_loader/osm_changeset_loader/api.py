@@ -11,7 +11,7 @@ from .db import query_changesets
 app = FastAPI()
 
 
-@app.get("/changesets/", response_model=List[Changeset])
+@app.get("/changesets/")
 async def get_changesets(
     min_lon: Optional[float] = Query(None, description="Minimum longitude"),
     max_lon: Optional[float] = Query(None, description="Maximum longitude"),
