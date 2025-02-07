@@ -8,9 +8,9 @@ from xml.etree.ElementTree import fromstring
 from dataclasses import dataclass
 from datetime import datetime
 
-from .model import Changeset
-from .path import Path
-from .config import Config
+from osm_changeset_loader.model import Changeset
+from osm_changeset_loader.path import Path
+from osm_changeset_loader.config import Config
 
 
 @dataclass

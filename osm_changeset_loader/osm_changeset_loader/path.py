@@ -55,3 +55,5 @@ class Path:
 
     def __repr__(self):
         return f"Path(sequence={self.sequence}, path_tuple={self.path_tuple})"
+from osm_changeset_loader.model import Changeset
+from osm_changeset_loader.config import Config
