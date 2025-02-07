@@ -13,16 +13,17 @@ from .db import query_changesets
 class ChangesetResponse(BaseModel):
     id: int
     created_at: datetime
-    closed_at: datetime
+    closed_at: Optional[datetime]
     user: str
     uid: int
     min_lon: float
     min_lat: float
     max_lon: float
     max_lat: float
-    comments_count: int
-    changes_count: int
-    tags: dict
+    open: Optional[bool]
+    bbox_area_km2: float
+    centroid_lon: float
+    centroid_lat: float
 
     class Config:
         orm_mode = True
