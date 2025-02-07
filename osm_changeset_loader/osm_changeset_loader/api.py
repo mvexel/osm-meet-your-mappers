@@ -5,10 +5,11 @@ FastAPI implementation for changeset API.
 from fastapi import FastAPI, Query
 from typing import Optional, List
 from datetime import datetime
-from osm_changeset_parser.model import Changeset
-from osm_changeset_parser.db import query_changesets
+from .model import Changeset
+from .db import query_changesets
 
 app = FastAPI()
+
 
 @app.get("/changesets/", response_model=List[Changeset])
 async def get_changesets(
@@ -17,9 +18,13 @@ async def get_changesets(
     min_lat: Optional[float] = Query(None, description="Minimum latitude"),
     max_lat: Optional[float] = Query(None, description="Maximum latitude"),
     user: Optional[str] = Query(None, description="Filter by username"),
-    created_after: Optional[datetime] = Query(None, description="Filter changesets created after this date"),
-    created_before: Optional[datetime] = Query(None, description="Filter changesets created before this date"),
-    limit: int = Query(100, description="Maximum number of results to return")
+    created_after: Optional[datetime] = Query(
+        None, description="Filter changesets created after this date"
+    ),
+    created_before: Optional[datetime] = Query(
+        None, description="Filter changesets created before this date"
+    ),
+    limit: int = Query(100, description="Maximum number of results to return"),
 ):
     """
     Get changesets with optional filters.
@@ -32,9 +37,11 @@ async def get_changesets(
         user=user,
         created_after=created_after,
         created_before=created_before,
-        limit=limit
+        limit=limit,
     )
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
