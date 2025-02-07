@@ -5,8 +5,8 @@ FastAPI implementation for changeset API.
 from fastapi import FastAPI, Query
 from typing import Optional, List
 from datetime import datetime
-from model import Changeset
-from db import query_changesets
+from osm_changeset_parser.model import Changeset
+from osm_changeset_parser.db import query_changesets
 
 app = FastAPI()
 
