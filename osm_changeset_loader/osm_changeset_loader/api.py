@@ -5,13 +5,32 @@ FastAPI implementation for changeset API.
 from fastapi import FastAPI, Query
 from typing import Optional, List
 from datetime import datetime
+from pydantic import BaseModel
 from .model import Changeset
 from .db import query_changesets
+
+
+class ChangesetResponse(BaseModel):
+    id: int
+    created_at: datetime
+    closed_at: datetime
+    user: str
+    uid: int
+    min_lon: float
+    min_lat: float
+    max_lon: float
+    max_lat: float
+    comments_count: int
+    changes_count: int
+    tags: dict
+
+    class Config:
+        orm_mode = True
 
 app = FastAPI()
 
 
-@app.get("/changesets/")
+@app.get("/changesets/", response_model=List[ChangesetResponse])
 async def get_changesets(
     min_lon: Optional[float] = Query(None, description="Minimum longitude"),
     max_lon: Optional[float] = Query(None, description="Maximum longitude"),
