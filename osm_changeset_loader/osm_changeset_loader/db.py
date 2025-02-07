@@ -74,3 +74,12 @@ def query_changesets(
         query = query.filter(Changeset.created_at <= created_before)
 
     return query.offset(offset).limit(limit).all()
+
+
+def get_oldest_changeset_timestamp(db_url=DB_URL):
+    """
+    Get the timestamp of the oldest changeset in the database.
+    """
+    session = get_db_session(db_url)
+    oldest = session.query(Changeset.created_at).order_by(Changeset.created_at).first()
+    return oldest[0] if oldest else None
