@@ -43,6 +43,7 @@ def query_changesets(
     created_after: Optional[str] = None,
     created_before: Optional[str] = None,
     limit: int = 100,
+    offset: int = 0,
 ) -> List[Changeset]:
     """
     Query changesets with optional filters.
@@ -72,4 +73,4 @@ def query_changesets(
     if created_before:
         query = query.filter(Changeset.created_at <= created_before)
 
-    return query.limit(limit).all()
+    return query.offset(offset).limit(limit).all()

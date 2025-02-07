@@ -45,6 +45,7 @@ async def get_changesets(
         None, description="Filter changesets created before this date"
     ),
     limit: int = Query(100, description="Maximum number of results to return"),
+    offset: int = Query(0, description="Offset for pagination"),
 ):
     """
     Get changesets with optional filters.
@@ -58,6 +59,7 @@ async def get_changesets(
         created_after=created_after,
         created_before=created_before,
         limit=limit,
+        offset=offset,
     )
 
 
