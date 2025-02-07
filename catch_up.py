@@ -10,11 +10,11 @@ from xml.etree.ElementTree import fromstring
 import requests
 from sqlalchemy.dialects.postgresql import insert
 
-from .osm_changeset_loader.osm_changeset_loader.config import Config
-from .osm_changeset_loader.osm_changeset_loader.db import create_tables, get_db_session
-from .osm_changeset_loader.osm_changeset_loader.model import Changeset, Metadata
-from .osm_changeset_loader.osm_changeset_loader.path import Path
-from .osm_changeset_loader.osm_changeset_loader.replication import ReplicationClient
+from osm_changeset_loader.osm_changeset_loader.config import Config
+from osm_changeset_loader.osm_changeset_loader.db import create_tables, get_db_session
+from osm_changeset_loader.osm_changeset_loader.model import Changeset, Metadata
+from osm_changeset_loader.osm_changeset_loader.path import Path
+from osm_changeset_loader.osm_changeset_loader.replication import ReplicationClient
 
 config = Config()
 replication_client = ReplicationClient(config)
