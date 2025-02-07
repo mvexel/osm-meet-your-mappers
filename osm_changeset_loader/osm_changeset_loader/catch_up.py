@@ -8,12 +8,12 @@ from typing import Optional
 from datetime import datetime
 from xml.etree.ElementTree import fromstring
 
-from model import Changeset, Metadata
-from db import create_tables, get_db_session
+from .model import Changeset, Metadata
+from .db import create_tables, get_db_session
 from sqlalchemy.dialects.postgresql import insert
-from path import Path
-from config import Config
-from replication import ReplicationClient
+from .path import Path
+from .config import Config
+from .replication import ReplicationClient
 
 config = Config()
 replication_client = ReplicationClient(config)
@@ -54,8 +54,6 @@ def set_local_state(state):
     metadata = Metadata(state=str(state.sequence), timestamp=datetime.now())
     session.add(metadata)
     session.commit()
-
-
 
 
 def insert_changesets(changesets):
@@ -177,14 +175,10 @@ def catch_up():
     stop_event = threading.Event()
 
     recent_thread = threading.Thread(
-        target=process_recent_changes,
-        args=(stop_event,),
-        name="recent-changes"
+        target=process_recent_changes, args=(stop_event,), name="recent-changes"
     )
     historical_thread = threading.Thread(
-        target=process_historical_changes,
-        args=(stop_event,),
-        name="historical-changes"
+        target=process_historical_changes, args=(stop_event,), name="historical-changes"
     )
 
     recent_thread.start()
@@ -198,8 +192,6 @@ def catch_up():
         stop_event.set()
         recent_thread.join()
         historical_thread.join()
-
-
 
 
 def handle_exit(signum, frame):

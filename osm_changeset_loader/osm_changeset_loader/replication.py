@@ -1,4 +1,5 @@
 """OSM replication API client."""
+
 from typing import Optional, List
 import logging
 import gzip
@@ -7,9 +8,10 @@ from xml.etree.ElementTree import fromstring
 from dataclasses import dataclass
 from datetime import datetime
 
-from model import Changeset
-from path import Path
-from config import Config
+from .model import Changeset
+from .path import Path
+from .config import Config
+
 
 @dataclass
 class ReplicationClient:
@@ -36,13 +38,13 @@ class ReplicationClient:
             response = requests.get(url)
             response.raise_for_status()
             tree = fromstring(gzip.decompress(response.content))
-            
+
             changesets = [
                 Changeset.from_xml(elem)
                 for elem in tree.findall("changeset")
                 if self._is_valid_changeset(elem)
             ]
-            
+
             logging.info(f"Downloaded {len(changesets)} changesets from {url}.")
             return changesets
         except requests.RequestException as e:
@@ -53,16 +55,18 @@ class ReplicationClient:
         """Check if changeset is valid according to our criteria."""
         if elem.attrib.get("open") != "false":
             return False
-            
+
         try:
             min_lat = float(elem.attrib.get("min_lat", 0))
             min_lon = float(elem.attrib.get("min_lon", 0))
             max_lat = float(elem.attrib.get("max_lat", 0))
             max_lon = float(elem.attrib.get("max_lon", 0))
-            
-            return (min_lat >= self.config.BBOX[1] and
-                    min_lon >= self.config.BBOX[0] and
-                    max_lat <= self.config.BBOX[3] and
-                    max_lon <= self.config.BBOX[2])
+
+            return (
+                min_lat >= self.config.BBOX[1]
+                and min_lon >= self.config.BBOX[0]
+                and max_lat <= self.config.BBOX[3]
+                and max_lon <= self.config.BBOX[2]
+            )
         except (ValueError, TypeError):
             return False
