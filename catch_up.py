@@ -139,15 +139,27 @@ def catch_up():
     local_state = get_local_state()
 
     while True:
-        while local_state < latest_path:
-            # First work backwards from whatever the current remote state is to the local state AI!
-            next_path = Path(sequence=local_state.sequence + 1)
-            changesets = get_changesets_from_repl(next_path)
+        # Work backwards from current remote state to local state
+        current_sequence = latest_path.sequence
+        while current_sequence > local_state.sequence:
+            current_path = Path(sequence=current_sequence)
+            logging.info(f"Processing sequence {current_sequence}")
+            
+            changesets = get_changesets_from_repl(current_path)
             if changesets:
-                insert_changesets(changesets)
-                set_local_state(next_path)
-                local_state = next_path
-        time.sleep(1)  # Sleep for a minute before checking the next state
+                if insert_changesets(changesets):
+                    set_local_state(current_path)
+                    
+            current_sequence -= 1
+            
+        # Check for new remote state
+        latest_path = get_remote_state()
+        if not latest_path:
+            logging.error("Failed to get remote state, retrying in 60 seconds")
+            time.sleep(60)
+            continue
+            
+        time.sleep(60)  # Wait before next check
 
 
 def get_remote_state():
