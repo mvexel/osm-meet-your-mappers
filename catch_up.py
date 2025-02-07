@@ -1,17 +1,19 @@
-import requests
 import logging
 import time
 import threading
-from queue import Queue
+import signal
+from typing import Optional
+from datetime import datetime
+
 from model import Changeset, Metadata
 from db import create_tables, get_db_session
 from sqlalchemy.dialects.postgresql import insert
-from datetime import datetime
-import gzip
-from xml.etree.ElementTree import fromstring
-import os
-import signal
 from path import Path
+from config import Config
+from replication import ReplicationClient
+
+config = Config()
+replication_client = ReplicationClient(config)
 
 # Global bounding box
 BBOX = [-180, -90, 180, 90]

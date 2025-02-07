@@ -1,14 +1,15 @@
+from typing import Optional
+from datetime import datetime
+from dataclasses import dataclass
 from sqlalchemy import (
-    ARRAY,
     Boolean,
     Column,
     DateTime,
     Float,
     Integer,
     String,
-    create_engine,
 )
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
