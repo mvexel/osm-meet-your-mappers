@@ -160,7 +160,7 @@ def process_historical_changes(stop_event):
             current_path = Path(sequence=current_sequence)
             logging.info(f"Processing historical sequence {current_sequence}")
 
-            changesets = get_changesets_from_repl(current_path)
+            changesets = replication_client.get_changesets(current_path)
             if changesets:
                 if insert_changesets(changesets):
                     set_local_state(current_path)
