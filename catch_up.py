@@ -1,6 +1,8 @@
 import requests
 import logging
 import time
+import threading
+from queue import Queue
 from model import Changeset, Metadata
 from db import create_tables, get_db_session
 from sqlalchemy.dialects.postgresql import insert
@@ -131,19 +133,23 @@ def insert_changesets(changesets):
         return False
 
 
-def catch_up():
+def process_recent_changes(stop_event):
     """
-    Work backwards from current remote state, retrieving minutely files counting backwards and inserting them into the database.
+    Monitor and process recent changes from the replication API.
     """
-    latest_path = get_remote_state()
-    local_state = get_local_state()
+    while not stop_event.is_set():
+        latest_path = get_remote_state()
+        if not latest_path:
+            logging.error("Failed to get remote state, retrying in 60 seconds")
+            time.sleep(60)
+            continue
 
-    while True:
-        # Work backwards from current remote state to local state
+        local_state = get_local_state()
         current_sequence = latest_path.sequence
-        while current_sequence > local_state.sequence:
+
+        while current_sequence > local_state.sequence and not stop_event.is_set():
             current_path = Path(sequence=current_sequence)
-            logging.info(f"Processing sequence {current_sequence}")
+            logging.info(f"Processing recent sequence {current_sequence}")
 
             changesets = get_changesets_from_repl(current_path)
             if changesets:
@@ -152,14 +158,64 @@ def catch_up():
 
             current_sequence -= 1
 
-        # Check for new remote state
-        latest_path = get_remote_state()
-        if not latest_path:
-            logging.error("Failed to get remote state, retrying in 60 seconds")
-            time.sleep(60)
-            continue
-
         time.sleep(60)  # Wait before next check
+
+
+def process_historical_changes(stop_event):
+    """
+    Process historical changes going backwards in time.
+    """
+    while not stop_event.is_set():
+        local_state = get_local_state()
+        if local_state.sequence <= 1:
+            logging.info("Reached beginning of history")
+            return
+
+        target_sequence = max(1, local_state.sequence - 1000)  # Process in chunks
+        current_sequence = local_state.sequence - 1
+
+        while current_sequence >= target_sequence and not stop_event.is_set():
+            current_path = Path(sequence=current_sequence)
+            logging.info(f"Processing historical sequence {current_sequence}")
+
+            changesets = get_changesets_from_repl(current_path)
+            if changesets:
+                if insert_changesets(changesets):
+                    set_local_state(current_path)
+
+            current_sequence -= 1
+
+        time.sleep(60)  # Pause between chunks
+
+
+def catch_up():
+    """
+    Run two threads: one for recent changes and one for historical backfill.
+    """
+    stop_event = threading.Event()
+
+    recent_thread = threading.Thread(
+        target=process_recent_changes,
+        args=(stop_event,),
+        name="recent-changes"
+    )
+    historical_thread = threading.Thread(
+        target=process_historical_changes,
+        args=(stop_event,),
+        name="historical-changes"
+    )
+
+    recent_thread.start()
+    historical_thread.start()
+
+    try:
+        recent_thread.join()
+        historical_thread.join()
+    except KeyboardInterrupt:
+        logging.info("Stopping threads...")
+        stop_event.set()
+        recent_thread.join()
+        historical_thread.join()
 
 
 def get_remote_state():
@@ -183,7 +239,8 @@ def get_remote_state():
 
 def handle_exit(signum, frame):
     logging.info("Exiting gracefully...")
-    exit(0)
+    # The main thread will handle cleanup
+    raise KeyboardInterrupt
 
 
 if __name__ == "__main__":
