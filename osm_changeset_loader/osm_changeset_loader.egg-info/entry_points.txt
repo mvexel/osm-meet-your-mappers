@@ -1,0 +1,3 @@
+[console_scripts]
+osm-changeset-catchup = catch_up.py:main
+osm-changeset-loader = osm_changeset_loader.osm_changeset_loader.api:main
