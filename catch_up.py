@@ -2,8 +2,11 @@ import logging
 import time
 import threading
 import signal
+import gzip
+import requests
 from typing import Optional
 from datetime import datetime
+from xml.etree.ElementTree import fromstring
 
 from model import Changeset, Metadata
 from db import create_tables, get_db_session
@@ -53,29 +56,6 @@ def set_local_state(state):
     session.commit()
 
 
-def get_changesets_from_repl(path):
-    """
-    Get changeset objects from replication path.
-    """
-    url = path.to_url()
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        tree = fromstring(gzip.decompress(response.content))
-        changesets = [
-            Changeset.from_xml(elem)
-            for elem in tree.findall("changeset")
-            if elem.attrib.get("open", None) == "false"
-            and float(elem.attrib.get("min_lat", 0)) >= BBOX[1]
-            and float(elem.attrib.get("min_lon", 0)) >= BBOX[0]
-            and float(elem.attrib.get("max_lat", 0)) <= BBOX[3]
-            and float(elem.attrib.get("max_lon", 0)) <= BBOX[2]
-        ]
-        logging.info(f"Downloaded {len(changesets)} changesets from {url}.")
-        return changesets
-    except requests.RequestException as e:
-        logging.error(f"Error fetching changesets from {url}: {e}")
-        return None
 
 
 def insert_changesets(changesets):
@@ -140,7 +120,7 @@ def process_recent_changes(stop_event):
     Monitor and process recent changes from the replication API.
     """
     while not stop_event.is_set():
-        latest_path = get_remote_state()
+        latest_path = replication_client.get_remote_state()
         if not latest_path:
             logging.error("Failed to get remote state, retrying in 60 seconds")
             time.sleep(60)
@@ -153,7 +133,7 @@ def process_recent_changes(stop_event):
             current_path = Path(sequence=current_sequence)
             logging.info(f"Processing recent sequence {current_sequence}")
 
-            changesets = get_changesets_from_repl(current_path)
+            changesets = replication_client.get_changesets(current_path)
             if changesets:
                 if insert_changesets(changesets):
                     set_local_state(current_path)
@@ -220,23 +200,6 @@ def catch_up():
         historical_thread.join()
 
 
-def get_remote_state():
-    """
-    Get the latest replication state from the OSM API.
-    """
-    try:
-        response = requests.get(
-            "https://planet.osm.org/replication/changesets/state.yaml"
-        )
-        response.raise_for_status()
-        state = response.text.split("\n")[2]
-        _, sequence = state.split(": ")
-        sequence = sequence.strip()
-        logging.debug(f"remote state is {sequence}")
-        return Path(sequence=int(sequence))
-    except requests.RequestException as e:
-        logging.error(f"Error fetching remote state: {e}")
-        return None
 
 
 def handle_exit(signum, frame):
