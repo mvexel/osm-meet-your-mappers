@@ -1,0 +1,14 @@
+ [Unit]
+ Description=OSM Changeset Parser Service
+ After=network.target
+
+ [Service]
+ User=osm
+ Group=osm
+ ExecStart=/usr/local/bin/osm-changeset-parser
+ Restart=always
+ RestartSec=5
+ Environment="PYTHONUNBUFFERED=1"
+
+ [Install]
+ WantedBy=multi-user.target
