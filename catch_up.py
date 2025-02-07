@@ -32,7 +32,7 @@ def get_local_state():
     Get the local state from the database.
     """
     session = get_db_session()
-    state = session.query(Metadata).order_by(Metadata.timestamp.desc()).first()
+    state = session.query(Metadata).order_by(Metadata.timestamp).first()
     if state:
         return Path(sequence=int(state.state))
     else:
@@ -144,21 +144,21 @@ def catch_up():
         while current_sequence > local_state.sequence:
             current_path = Path(sequence=current_sequence)
             logging.info(f"Processing sequence {current_sequence}")
-            
+
             changesets = get_changesets_from_repl(current_path)
             if changesets:
                 if insert_changesets(changesets):
                     set_local_state(current_path)
-                    
+
             current_sequence -= 1
-            
+
         # Check for new remote state
         latest_path = get_remote_state()
         if not latest_path:
             logging.error("Failed to get remote state, retrying in 60 seconds")
             time.sleep(60)
             continue
-            
+
         time.sleep(60)  # Wait before next check
 
 
