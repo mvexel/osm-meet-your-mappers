@@ -26,7 +26,8 @@ class ChangesetResponse(BaseModel):
     centroid_lat: float
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
 
 app = FastAPI()
 
