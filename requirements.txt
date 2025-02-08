@@ -1,3 +1,4 @@
+alembic==1.11.1
 certifi==2025.1.31
 charset-normalizer==3.4.1
 fastapi==0.110.1
