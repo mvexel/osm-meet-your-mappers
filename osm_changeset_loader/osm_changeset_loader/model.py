@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     ForeignKey,
+    BigInteger,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -27,21 +28,25 @@ class Metadata(Base):
 class ChangesetTag(Base):
     __tablename__ = "changeset_tags"
 
-    id = Column(Integer, primary_key=True)
-    changeset_id = Column(Integer, ForeignKey("changesets.id"), index=True)
+    id = Column(BigInteger, primary_key=True)
+    changeset_id = Column(BigInteger, ForeignKey("changesets.id"), index=True)
     k = Column(String, nullable=False)
     v = Column(String)
+
+    changeset = relationship("Changeset", back_populates="tags")
 
 
 class ChangesetComment(Base):
     __tablename__ = "changeset_comments"
 
-    id = Column(Integer, primary_key=True)
-    changeset_id = Column(Integer, ForeignKey("changesets.id"), index=True)
-    uid = Column(Integer)
+    id = Column(BigInteger, primary_key=True)
+    changeset_id = Column(BigInteger, ForeignKey("changesets.id"), index=True)
+    uid = Column(BigInteger)
     user = Column(String)
     date = Column(DateTime)
     text = Column(String)
+
+    changeset = relationship("Changeset", back_populates="comments")
 
 
 class Changeset(Base):
@@ -62,9 +67,9 @@ class Changeset(Base):
         Index("idx_changesets_comments_count", "comments_count"),
     )
 
-    id = Column(Integer, primary_key=True)
+    id = Column(BigInteger, primary_key=True)
     user = Column(String)
-    uid = Column(Integer)
+    uid = Column(BigInteger)
     created_at = Column(DateTime)
     closed_at = Column(DateTime)
     open = Column(Boolean)
@@ -77,8 +82,8 @@ class Changeset(Base):
     bbox_area_km2 = Column(Float)
     centroid_lon = Column(Float)
     centroid_lat = Column(Float)
-    tags = relationship("ChangesetTag", backref="changeset")
-    comments = relationship("ChangesetComment", backref="changeset")
+    tags = relationship("ChangesetTag", back_populates="changeset", cascade="all, delete-orphan")
+    comments = relationship("ChangesetComment", back_populates="changeset", cascade="all, delete-orphan")
 
     @classmethod
     def from_xml(cls, elem):
@@ -89,8 +94,8 @@ class Changeset(Base):
         changeset.id = int(elem.attrib.get("id", 0))
         changeset.user = elem.attrib.get("user", None)
         changeset.uid = int(elem.attrib.get("uid", 0))
-        changeset.created_at = elem.attrib.get("created_at", None)
-        changeset.closed_at = elem.attrib.get("closed_at", None)
+        changeset.created_at = datetime.fromisoformat(elem.attrib.get("created_at")) if elem.attrib.get("created_at") else None
+        changeset.closed_at = datetime.fromisoformat(elem.attrib.get("closed_at")) if elem.attrib.get("closed_at") else None
         changeset.open = elem.attrib.get("open", None) == "true"
         changeset.num_changes = int(elem.attrib.get("num_changes", 0))
         changeset.comments_count = int(elem.attrib.get("comments_count", 0))
@@ -113,7 +118,7 @@ class Changeset(Base):
                 ChangesetComment(
                     uid=int(comment.attrib["uid"]),
                     user=comment.attrib["user"],
-                    date=comment.attrib["date"],
+                    date=datetime.fromisoformat(comment.attrib["date"]),
                     text=comment.find("text").text if comment.find("text") is not None else None,
                 )
                 for comment in discussion.findall("comment")
