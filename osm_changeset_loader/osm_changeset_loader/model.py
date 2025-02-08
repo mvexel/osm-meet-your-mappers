@@ -9,8 +9,9 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    ForeignKey,
 )
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
@@ -25,15 +26,16 @@ class Metadata(Base):
 
 class ChangesetTag(Base):
     __tablename__ = "changeset_tags"
-    
+
     id = Column(Integer, primary_key=True)
     changeset_id = Column(Integer, ForeignKey("changesets.id"), index=True)
     k = Column(String, nullable=False)
     v = Column(String)
 
+
 class ChangesetComment(Base):
     __tablename__ = "changeset_comments"
-    
+
     id = Column(Integer, primary_key=True)
     changeset_id = Column(Integer, ForeignKey("changesets.id"), index=True)
     uid = Column(Integer)
@@ -41,22 +43,23 @@ class ChangesetComment(Base):
     date = Column(DateTime)
     text = Column(String)
 
+
 class Changeset(Base):
     __tablename__ = "changesets"
-    
+
     # Indices for common query patterns
     __table_args__ = (
         # Index for user lookups and grouping
-        Index('idx_changesets_user', 'user'),
+        Index("idx_changesets_user", "user"),
         # Index for temporal queries
-        Index('idx_changesets_created_at', 'created_at'),
+        Index("idx_changesets_created_at", "created_at"),
         # Compound index for spatial queries (order matches how we typically filter)
-        Index('idx_changesets_bbox', 'min_lon', 'max_lon', 'min_lat', 'max_lat'),
+        Index("idx_changesets_bbox", "min_lon", "max_lon", "min_lat", "max_lat"),
         # Index for combined user+time queries
-        Index('idx_changesets_user_created_at', 'user', 'created_at'),
+        Index("idx_changesets_user_created_at", "user", "created_at"),
         # New indices for query patterns
-        Index('idx_changesets_num_changes', 'num_changes'),
-        Index('idx_changesets_comments_count', 'comments_count')
+        Index("idx_changesets_num_changes", "num_changes"),
+        Index("idx_changesets_comments_count", "comments_count"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -108,9 +111,9 @@ class Changeset(Base):
                 uid=int(comment.attrib["uid"]),
                 user=comment.attrib["user"],
                 date=comment.attrib["date"],
-                text=comment.find("text").text
+                text=comment.find("text").text,
             )
-            for comment in elem.find("discussion").findall("comment") 
+            for comment in elem.find("discussion").findall("comment")
             if elem.find("discussion") is not None
         ]
 
