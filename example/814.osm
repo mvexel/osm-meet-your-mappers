@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="replicate_changesets.rb" copyright="OpenStreetMap and contributors" attribution="https://www.openstreetmap.org/copyright" license="https://opendatacommons.org/licenses/odbl/1-0/">
+  <changeset id="161728680" created_at="2025-01-24T21:21:45Z" closed_at="2025-01-24T21:21:47Z" open="false" num_changes="2" user="green_leek" uid="3559445" min_lat="-33.9342081" max_lat="-33.9338966" min_lon="151.0260159" max_lon="151.0265486" comments_count="3">
+    <tag k="comment" v="Added manoeuvre relation"/>
+    <tag k="created_by" v="JOSM/1.5 (19253 en_AU)"/>
+    <tag k="source" v="DCS NSW Imagery"/>
+    <discussion>
+      <comment id="1384269" uid="5164" user="woodpeck" date="2025-02-07T12:35:01Z">
+        <text>https://www.openstreetmap.org/relation/18608914 contains both a via point and a via way - is that intentional?</text>
+      </comment>
+      <comment id="1384505" uid="2622285" user="TheSwavu" date="2025-02-07T22:41:42Z">
+        <text>A more interesting question would be: what router are you using that can't tell it's either straight on or left turn with out a manoeuvre relations?
+
+PS:
+
+If you make one of them fork then the other one needs to also be fork, or if you want the other one to be continue then it needs to be turn.</text>
+      </comment>
+      <comment id="1384551" uid="3559445" user="green_leek" date="2025-02-08T01:31:01Z">
+        <text>There is no "left turn" at the intersection to Chapel Rd, the left lane continue to Chapel Rd. They are both straight on (see the solid line marking), The relation maybe not necessarily as I created turn lanes later on.</text>
+      </comment>
+    </discussion>
+  </changeset>
+  <changeset id="162265897" created_at="2025-02-08T01:31:02Z" closed_at="2025-02-08T01:31:12Z" open="false" num_changes="10" user="JuanMelo" uid="12906384" min_lat="10.911351" max_lat="10.9131727" min_lon="-74.823842" max_lon="-74.8216626" comments_count="0">
+    <tag k="comment" v="#Kaart 2025 #MR57653 mpr.lt/c/49227/t/269287253 Se verificaron vías en construcción"/>
+    <tag k="created_by" v="JOSM/1.5 (19277 en)"/>
+    <tag k="hashtags" v="#Kaart;#MR57653"/>
+    <tag k="source" v="Mapbox Satellite; Strava cycling and running heatmap; knowledge"/>
+  </changeset>
+  <changeset id="162265898" created_at="2025-02-08T01:31:05Z" open="true" num_changes="1" user="kogvos" uid="20653494" min_lat="-37.8196431" max_lat="-37.8196431" min_lon="144.9542906" max_lon="144.9542906" comments_count="0">
+    <tag k="comment" v="Specify whether public transport stops have shelters"/>
+    <tag k="created_by" v="StreetComplete 60.1"/>
+    <tag k="locale" v="en-AU"/>
+    <tag k="source" v="survey"/>
+    <tag k="StreetComplete:quest_type" v="AddBusStopShelter"/>
+  </changeset>
+  <changeset id="162265899" created_at="2025-02-08T01:31:14Z" closed_at="2025-02-08T01:31:16Z" open="false" num_changes="1" user="ZeLonewolf" uid="219297" min_lat="39.148351" max_lat="39.176223" min_lon="-80.363183" max_lon="-80.336131" comments_count="0">
+    <tag k="comment" v="Update CDPs and align boundaries"/>
+    <tag k="created_by" v="JOSM/1.5 (19290 en)"/>
+    <tag k="source" v="US Census Bureau; OSM conventions for boundaries"/>
+  </changeset>
+  <changeset id="162265900" created_at="2025-02-08T01:31:17Z" closed_at="2025-02-08T01:31:19Z" open="false" num_changes="8" user="aomund" uid="21845229" min_lat="31.9152879" max_lat="31.9160398" min_lon="131.4124933" max_lon="131.4152942" comments_count="0">
+    <tag k="comment" v="航空写真のトレース（建物、歩道）、道路の細かな修正"/>
+    <tag k="created_by" v="JOSM/1.5 (19307 ja)"/>
+    <tag k="source" v="Bing; Japan GSI Standard Map"/>
+  </changeset>
+  <changeset id="162265901" created_at="2025-02-08T01:31:22Z" open="true" num_changes="1" user="Arturo Francisco Barbero" uid="12605644" min_lat="40.9522954" max_lat="40.9522954" min_lon="-4.1277389" max_lon="-4.1277389" comments_count="0">
+    <tag k="comment" v="Specify drinking water types"/>
+    <tag k="created_by" v="StreetComplete 60.1"/>
+    <tag k="locale" v="es-ES"/>
+    <tag k="source" v="survey"/>
+    <tag k="StreetComplete:quest_type" v="AddDrinkingWaterType"/>
+  </changeset>
+  <changeset id="162265902" created_at="2025-02-08T01:31:24Z" open="true" num_changes="1" user="kogvos" uid="20653494" min_lat="-37.8196431" max_lat="-37.8196431" min_lon="144.9542906" max_lon="144.9542906" comments_count="0">
+    <tag k="comment" v="Specify whether public transport stops have benches"/>
+    <tag k="created_by" v="StreetComplete 60.1"/>
+    <tag k="locale" v="en-AU"/>
+    <tag k="source" v="survey"/>
+    <tag k="StreetComplete:quest_type" v="AddBenchStatusOnBusStop"/>
+  </changeset>
+  <changeset id="162265903" created_at="2025-02-08T01:31:27Z" closed_at="2025-02-08T01:31:28Z" open="false" num_changes="10" user="Masafumi Takeda" uid="3241164" min_lat="34.6505193" max_lat="34.6513465" min_lon="135.3869303" max_lon="135.387709" comments_count="0">
+    <tag k="changesets_count" v="24"/>
+    <tag k="comment" v="外観を修正"/>
+    <tag k="created_by" v="iD 2.31.1"/>
+    <tag k="host" v="https://www.openstreetmap.org/edit"/>
+    <tag k="imagery_used" v="Esri World Imagery"/>
+    <tag k="locale" v="ja"/>
+  </changeset>
+  <changeset id="162265904" created_at="2025-02-08T01:31:28Z" open="true" num_changes="1" user="kogvos" uid="20653494" min_lat="-37.8196431" max_lat="-37.8196431" min_lon="144.9542906" max_lon="144.9542906" comments_count="0">
+    <tag k="comment" v="Specify whether public transport stops have bins"/>
+    <tag k="created_by" v="StreetComplete 60.1"/>
+    <tag k="locale" v="en-AU"/>
+    <tag k="source" v="survey"/>
+    <tag k="StreetComplete:quest_type" v="AddBinStatusOnBusStop"/>
+  </changeset>
+  <changeset id="162265905" created_at="2025-02-08T01:31:29Z" open="true" num_changes="1" user="Arturo Francisco Barbero" uid="12605644" min_lat="40.9522374" max_lat="40.9523947" min_lon="-4.1279912" max_lon="-4.127521" comments_count="0">
+    <tag k="comment" v="Specify whether ways are lit"/>
+    <tag k="created_by" v="StreetComplete 60.1"/>
+    <tag k="locale" v="es-ES"/>
+    <tag k="source" v="survey"/>
+    <tag k="StreetComplete:quest_type" v="WayLitOverlay"/>
+  </changeset>
+  <changeset id="162265906" created_at="2025-02-08T01:31:33Z" open="true" num_changes="1" user="kogvos" uid="20653494" min_lat="-37.8196431" max_lat="-37.8196431" min_lon="144.9542906" max_lon="144.9542906" comments_count="0">
+    <tag k="comment" v="Specify whether public transport stops have tactile paving"/>
+    <tag k="created_by" v="StreetComplete 60.1"/>
+    <tag k="locale" v="en-AU"/>
+    <tag k="source" v="survey"/>
+    <tag k="StreetComplete:quest_type" v="AddTactilePavingBusStop"/>
+  </changeset>
+  <changeset id="162265907" created_at="2025-02-08T01:31:35Z" open="true" num_changes="1" user="kogvos" uid="20653494" min_lat="-37.8196431" max_lat="-37.8196431" min_lon="144.9542906" max_lon="144.9542906" comments_count="0">
+    <tag k="comment" v="Add whether public transport stops are lit"/>
+    <tag k="created_by" v="StreetComplete 60.1"/>
+    <tag k="locale" v="en-AU"/>
+    <tag k="source" v="survey"/>
+    <tag k="StreetComplete:quest_type" v="AddBusStopLit"/>
+  </changeset>
+  <changeset id="162265908" created_at="2025-02-08T01:31:41Z" open="true" num_changes="1" user="kogvos" uid="20653494" min_lat="-37.8194887" max_lat="-37.8194887" min_lon="144.9545151" max_lon="144.9545151" comments_count="0">
+    <tag k="comment" v="Survey if places still exist"/>
+    <tag k="created_by" v="StreetComplete 60.1"/>
+    <tag k="locale" v="en-AU"/>
+    <tag k="source" v="survey"/>
+    <tag k="StreetComplete:quest_type" v="CheckExistence"/>
+  </changeset>
+  <changeset id="162265909" created_at="2025-02-08T01:31:43Z" closed_at="2025-02-08T01:31:44Z" open="false" num_changes="1" user="Myazyk" uid="899942" min_lat="49.3482005" max_lat="49.3483837" min_lon="23.4902169" max_lon="23.490404" comments_count="0">
+    <tag k="changesets_count" v="18863"/>
+    <tag k="comment" v="Improvements"/>
+    <tag k="created_by" v="iD 2.31.1"/>
+    <tag k="host" v="https://www.openstreetmap.org/edit"/>
+    <tag k="imagery_used" v="Mapbox Satellite"/>
+    <tag k="locale" v="uk"/>
+  </changeset>
+  <changeset id="162265910" created_at="2025-02-08T01:31:44Z" closed_at="2025-02-08T01:31:44Z" open="false" num_changes="55" user="0235" uid="2066768" min_lat="38.6916005" max_lat="38.6975318" min_lon="-121.5984717" max_lon="-121.59041" comments_count="0">
+    <tag k="changesets_count" v="3891"/>
+    <tag k="comment" v="Added Grass, added aircraft parking positions"/>
+    <tag k="created_by" v="iD 2.31.1"/>
+    <tag k="host" v="https://www.openstreetmap.org/edit"/>
+    <tag k="imagery_used" v="Esri World Imagery;Esri World Imagery (Clarity) Beta"/>
+    <tag k="locale" v="en-GB"/>
+  </changeset>
+  <changeset id="162265911" created_at="2025-02-08T01:31:58Z" open="true" num_changes="1" user="gametabe" uid="12321572" min_lat="51.2615815" max_lat="51.261858" min_lon="12.3733489" max_lon="12.3739749" comments_count="0">
+    <tag k="comment" v="Specify path surfaces"/>
+    <tag k="created_by" v="StreetComplete 60.1"/>
+    <tag k="locale" v="de-DE"/>
+    <tag k="source" v="survey"/>
+    <tag k="StreetComplete:quest_type" v="AddPathSurface"/>
+  </changeset>
+</osm>
