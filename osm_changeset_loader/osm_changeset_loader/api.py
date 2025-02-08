@@ -174,28 +174,28 @@ async def get_mappers(
     min_lon: float = Query(
         ...,
         description="Minimum longitude of bounding box",
-        example=-0.489,
+        example=-114.053,
         ge=-180,
         le=180
     ),
     max_lon: float = Query(
         ...,
         description="Maximum longitude of bounding box",
-        example=0.236,
+        example=-109.041,
         ge=-180,
         le=180
     ),
     min_lat: float = Query(
         ...,
         description="Minimum latitude of bounding box",
-        example=51.28,
+        example=36.998,
         ge=-90,
         le=90
     ),
     max_lat: float = Query(
         ...,
         description="Maximum latitude of bounding box",
-        example=51.686,
+        example=42.002,
         ge=-90,
         le=90
     )
