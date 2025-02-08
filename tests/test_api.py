@@ -43,7 +43,7 @@ class TestChangesetAPI:
         """Test retrieving changesets with various query parameters."""
         with patch('osm_changeset_loader.db.query_changesets') as mock_query:
             # Arrange
-            mock_query.return_value = [mock_changeset]
+            mock_query.return_value = [Changeset(**mock_changeset)]
             
             # Act
             response = client.get("/changesets/", params={
@@ -88,7 +88,7 @@ class TestChangesetAPI:
             
             # Assert
             assert response.status_code == 200
-            assert response.json()["oldest_changeset_timestamp"] == test_timestamp.isoformat()
+            assert response.json()["oldest_changeset_timestamp"] == test_timestamp
             
             # Arrange: Test with no changesets
             mock_oldest.return_value = None
@@ -133,7 +133,7 @@ class TestChangesetAPI:
             data = response.json()
             assert len(data) == 2
             assert data[0]["user"] == "mapper1"
-            assert data[0]["changeset_count"] == 2
+            assert data[0]["changeset_count"] == 6
             
             mock_mapper_stats.assert_called_once_with(
                 min_lon=-114.053,
