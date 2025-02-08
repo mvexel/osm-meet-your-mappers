@@ -5,6 +5,7 @@ from unittest.mock import patch
 from osm_changeset_loader.api import app
 from osm_changeset_loader.model import Changeset
 from osm_changeset_loader.db import query_changesets, get_oldest_changeset_timestamp, get_mapper_statistics
+from typing import List, Optional
 
 client = TestClient(app)
 
@@ -26,7 +27,7 @@ def mock_changeset():
     )
 
 def test_read_changesets(mock_changeset):
-    with patch.object(query_changesets, "__call__") as mock_query:
+    with patch('osm_changeset_loader.db.query_changesets') as mock_query:
         mock_query.return_value = [mock_changeset]
         
         response = client.get("/changesets/", params={
@@ -60,7 +61,7 @@ def test_read_changesets(mock_changeset):
 def test_get_oldest_changeset():
     test_timestamp = datetime.utcnow() - timedelta(days=365)
     
-    with patch.object(get_oldest_changeset_timestamp, "__call__") as mock_oldest:
+    with patch('osm_changeset_loader.db.get_oldest_changeset_timestamp') as mock_oldest:
         # Test with existing changeset
         mock_oldest.return_value = test_timestamp
         response = client.get("/oldest")
@@ -74,22 +75,29 @@ def test_get_oldest_changeset():
         assert response.json()["oldest_changeset_timestamp"] is None
 
 def test_get_mapper_statistics():
+    MockStat = type('MockStat', (), {
+        'user': str,
+        'changeset_count': int,
+        'last_change': datetime,
+        'changeset_ids': List[int]
+    })
+    
     mock_stats = [
-        type("MockStat", (), {
-            "user": "mapper1",
-            "changeset_count": 5,
-            "last_change": datetime.utcnow(),
-            "changeset_ids": [1,2,3,4,5]
-        }),
-        type("MockStat", (), {
-            "user": "mapper2",
-            "changeset_count": 3,
-            "last_change": datetime.utcnow() - timedelta(days=1),
-            "changeset_ids": [6,7,8]
-        })
+        MockStat(
+            user="mapper1",
+            changeset_count=5,
+            last_change=datetime.utcnow(),
+            changeset_ids=[1,2,3,4,5]
+        ),
+        MockStat(
+            user="mapper2",
+            changeset_count=3,
+            last_change=datetime.utcnow() - timedelta(days=1),
+            changeset_ids=[6,7,8]
+        )
     ]
     
-    with patch.object(get_mapper_statistics, "__call__") as mock_mapper_stats:
+    with patch('osm_changeset_loader.db.get_mapper_statistics') as mock_mapper_stats:
         mock_mapper_stats.return_value = mock_stats
         
         response = client.get("/mappers/", params={
