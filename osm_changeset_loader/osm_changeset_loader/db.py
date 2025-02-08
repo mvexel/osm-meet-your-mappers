@@ -81,30 +81,37 @@ def get_oldest_changeset_timestamp(db_url=DB_URL):
     Get the timestamp of the oldest changeset in the database.
     """
     session = get_db_session(db_url)
-    oldest = session.query(Changeset.created_at).order_by(Changeset.created_at).first()
+    oldest = session.query(Changeset.closed_at).order_by(Changeset.closed_at).first()
     return oldest[0] if oldest else None
 
-def get_mapper_statistics(min_lon: float, max_lon: float, min_lat: float, max_lat: float, db_url=DB_URL):
+
+def get_mapper_statistics(
+    min_lon: float, max_lon: float, min_lat: float, max_lat: float, db_url=DB_URL
+):
     """
     Get mapper statistics within a bounding box.
     Only counts changesets whose bounding boxes are completely contained within
     the query bounding box.
     """
     session = get_db_session(db_url)
-    return session.query(
-        Changeset.user,
-        func.count(Changeset.id).label('changeset_count'),
-        func.max(Changeset.created_at).label('last_change'),
-        func.array_agg(Changeset.id).label('changeset_ids')
-    ).filter(
-        and_(
-            # Changeset min coordinates must be greater than or equal to query min
-            Changeset.min_lon >= min_lon,
-            Changeset.min_lat >= min_lat,
-            # Changeset max coordinates must be less than or equal to query max
-            Changeset.max_lon <= max_lon,
-            Changeset.max_lat <= max_lat
+    return (
+        session.query(
+            Changeset.user,
+            func.count(Changeset.id).label("changeset_count"),
+            func.max(Changeset.created_at).label("last_change"),
+            func.array_agg(Changeset.id).label("changeset_ids"),
         )
-    ).group_by(Changeset.user).order_by(
-        func.count(Changeset.id).desc()  # Order by most active mappers first
-    ).all()
+        .filter(
+            and_(
+                # Changeset min coordinates must be greater than or equal to query min
+                Changeset.min_lon >= min_lon,
+                Changeset.min_lat >= min_lat,
+                # Changeset max coordinates must be less than or equal to query max
+                Changeset.max_lon <= max_lon,
+                Changeset.max_lat <= max_lat,
+            )
+        )
+        .group_by(Changeset.user)
+        .order_by(func.count(Changeset.id).desc())  # Order by most active mappers first
+        .all()
+    )
