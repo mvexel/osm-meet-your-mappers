@@ -30,6 +30,7 @@ dependencies = [
     "psycopg2-binary>=2.9.0",
     "requests>=2.28.0",
     "pydantic>=2.0.0",
+    "sqlalchemy-utils>=0.41.0",
 ]
 
 [project.scripts]
