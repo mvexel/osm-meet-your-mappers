@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from osm_changeset_loader.config import Config
 from osm_changeset_loader.db import create_tables, get_db_session
-from osm_changeset_loader.model import Changeset, Metadata
+from osm_changeset_loader.model import Changeset, Metadata, ChangesetTag, ChangesetComment
 from osm_changeset_loader.path import Path
 from osm_changeset_loader.replication import ReplicationClient
 from sqlalchemy.dialects.postgresql import insert
@@ -63,49 +63,61 @@ def insert_changesets(changesets):
     """
     session = get_db_session()
 
-    values = [
-        {
-            "id": cs.id,
-            "user": cs.user,
-            "uid": cs.uid,
-            "created_at": cs.created_at,
-            "closed_at": cs.closed_at,
-            "open": cs.open,
-            "min_lat": cs.min_lat,
-            "min_lon": cs.min_lon,
-            "max_lat": cs.max_lat,
-            "max_lon": cs.max_lon,
-            "bbox_area_km2": cs.bbox_area_km2,
-            "centroid_lon": cs.centroid_lon,
-            "centroid_lat": cs.centroid_lat,
-        }
-        for cs in changesets
-    ]
-    if len(values) == 0:
-        logging.info("No changesets to insert.")
-        return False
-
-    statement = insert(Changeset).values(values)
-    do_update = statement.on_conflict_do_update(
-        index_elements=[Changeset.id],
-        set_={
-            "user": statement.excluded.user,
-            "uid": statement.excluded.uid,
-            "created_at": statement.excluded.created_at,
-            "closed_at": statement.excluded.closed_at,
-            "open": statement.excluded.open,
-            "min_lat": statement.excluded.min_lat,
-            "min_lon": statement.excluded.min_lon,
-            "max_lat": statement.excluded.max_lat,
-            "max_lon": statement.excluded.max_lon,
-            "bbox_area_km2": statement.excluded.bbox_area_km2,
-            "centroid_lon": statement.excluded.centroid_lon,
-            "centroid_lat": statement.excluded.centroid_lat,
-        },
-    )
-
     try:
-        session.execute(do_update)
+        for cs in changesets:
+            # Insert or update the changeset
+            statement = insert(Changeset).values(
+                id=cs.id,
+                user=cs.user,
+                uid=cs.uid,
+                created_at=cs.created_at,
+                closed_at=cs.closed_at,
+                open=cs.open,
+                min_lat=cs.min_lat,
+                min_lon=cs.min_lon,
+                max_lat=cs.max_lat,
+                max_lon=cs.max_lon,
+                bbox_area_km2=cs.bbox_area_km2,
+                centroid_lon=cs.centroid_lon,
+                centroid_lat=cs.centroid_lat,
+            )
+            do_update = statement.on_conflict_do_update(
+                index_elements=[Changeset.id],
+                set_={
+                    "user": statement.excluded.user,
+                    "uid": statement.excluded.uid,
+                    "created_at": statement.excluded.created_at,
+                    "closed_at": statement.excluded.closed_at,
+                    "open": statement.excluded.open,
+                    "min_lat": statement.excluded.min_lat,
+                    "min_lon": statement.excluded.min_lon,
+                    "max_lat": statement.excluded.max_lat,
+                    "max_lon": statement.excluded.max_lon,
+                    "bbox_area_km2": statement.excluded.bbox_area_km2,
+                    "centroid_lon": statement.excluded.centroid_lon,
+                    "centroid_lat": statement.excluded.centroid_lat,
+                },
+            )
+            session.execute(do_update)
+
+            # Delete existing tags and comments for this changeset
+            session.query(ChangesetTag).filter(ChangesetTag.changeset_id == cs.id).delete()
+            session.query(ChangesetComment).filter(ChangesetComment.changeset_id == cs.id).delete()
+
+            # Insert new tags
+            for tag in cs.tags:
+                session.add(ChangesetTag(changeset_id=cs.id, k=tag.k, v=tag.v))
+
+            # Insert new comments
+            for comment in cs.comments:
+                session.add(ChangesetComment(
+                    changeset_id=cs.id,
+                    uid=comment.uid,
+                    user=comment.user,
+                    date=comment.date,
+                    text=comment.text
+                ))
+
         session.commit()
         return True
     except Exception as e:
