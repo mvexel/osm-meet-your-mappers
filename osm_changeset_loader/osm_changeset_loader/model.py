@@ -6,6 +6,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     Float,
+    Index,
     Integer,
     String,
 )
@@ -24,6 +25,18 @@ class Metadata(Base):
 
 class Changeset(Base):
     __tablename__ = "changesets"
+    
+    # Indices for common query patterns
+    __table_args__ = (
+        # Index for user lookups and grouping
+        Index('idx_changesets_user', 'user'),
+        # Index for temporal queries
+        Index('idx_changesets_created_at', 'created_at'),
+        # Compound index for spatial queries (order matches how we typically filter)
+        Index('idx_changesets_bbox', 'min_lon', 'max_lon', 'min_lat', 'max_lat'),
+        # Index for combined user+time queries
+        Index('idx_changesets_user_created_at', 'user', 'created_at')
+    )
 
     id = Column(Integer, primary_key=True)
     user = Column(String)
