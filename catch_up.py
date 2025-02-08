@@ -28,6 +28,14 @@ logging.basicConfig(
 )
 
 
+def truncate_db():
+    """
+    Truncate all tables in the database.
+    """
+    from truncate_db import truncate_tables
+    truncate_tables()
+
+
 def init_db():
     """
     Initialize the database.
@@ -240,5 +248,6 @@ def handle_exit(signum, frame):
 if __name__ == "__main__":
     signal.signal(signal.SIGTERM, handle_exit)
     signal.signal(signal.SIGINT, handle_exit)
+    truncate_db()  # Truncate the database before initializing
     init_db()
     catch_up()
