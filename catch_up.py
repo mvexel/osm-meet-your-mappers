@@ -4,7 +4,7 @@ import threading
 import time
 from datetime import datetime
 from xml.etree.ElementTree import fromstring
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from osm_changeset_loader.config import Config
 from osm_changeset_loader.db import create_tables, get_db_session
@@ -18,6 +18,9 @@ replication_client = ReplicationClient(config)
 
 # Global bounding box
 BBOX = [-180, -90, 180, 90]
+
+# Number of threads for historical processing
+HISTORICAL_THREADS = 8
 
 # Setup logging
 logging.basicConfig(
@@ -160,24 +163,34 @@ def process_historical_changes(stop_event):
     """
     Process historical changes going backwards in time using multiple threads.
     """
-    with ThreadPoolExecutor(max_workers=config.HISTORICAL_THREADS) as executor:
+    with ThreadPoolExecutor(max_workers=HISTORICAL_THREADS) as executor:
         while not stop_event.is_set():
             local_state = get_local_state()
             if local_state.sequence <= 1:
                 logging.info("Reached beginning of history")
                 return
 
-            chunk_size = 1000 // config.HISTORICAL_THREADS
-            for i in range(config.HISTORICAL_THREADS):
-                start_sequence = max(1, local_state.sequence - i * chunk_size - 1)
-                end_sequence = max(1, start_sequence - chunk_size + 1)
-                executor.submit(
-                    process_historical_range, start_sequence, end_sequence, stop_event
-                )
+            chunk_size = 1000
+            start_sequence = local_state.sequence
+            end_sequence = max(1, start_sequence - chunk_size * HISTORICAL_THREADS)
 
-            time.sleep(
-                config.SLEEP_INTERVAL
-            )  # Wait before starting next batch of threads
+            futures = []
+            for i in range(HISTORICAL_THREADS):
+                thread_start = max(1, start_sequence - i * chunk_size)
+                thread_end = max(1, thread_start - chunk_size)
+                future = executor.submit(process_historical_range, thread_start, thread_end, stop_event)
+                futures.append(future)
+
+            # Wait for all threads to complete
+            for future in as_completed(futures):
+                if future.exception():
+                    logging.error(f"Thread raised an exception: {future.exception()}")
+
+            # Update local state after processing
+            new_local_state = get_local_state()
+            if new_local_state.sequence == local_state.sequence:
+                # If no progress was made, sleep before next attempt
+                time.sleep(config.SLEEP_INTERVAL)
 
 
 def catch_up():
