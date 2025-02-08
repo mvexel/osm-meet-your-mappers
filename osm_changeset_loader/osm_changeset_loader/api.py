@@ -64,6 +64,11 @@ async def get_changesets(
     )
 
 
+@app.get("/oldest")
+async def get_oldest_changeset():
+    # New endpoint to get the timestamp for the oldest changeset AI!
+
+
 if __name__ == "__main__":
     import uvicorn
 
