@@ -1,11 +1,11 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 from osm_changeset_loader.api import app
 from osm_changeset_loader.model import Changeset
 from osm_changeset_loader.db import query_changesets, get_oldest_changeset_timestamp, get_mapper_statistics
-from typing import List, Optional
+from typing import List, Optional, NamedTuple
 
 client = TestClient(app)
 
@@ -13,15 +13,15 @@ client = TestClient(app)
 def mock_changeset():
     return Changeset(
         id=123,
-        created_at=datetime.utcnow() - timedelta(days=1),
-        closed_at=datetime.utcnow(),
+        created_at=datetime.now(UTC) - timedelta(days=1),
+        closed_at=datetime.now(UTC),
         user="test_user",
         uid=456,
         min_lon=-0.489,
         min_lat=51.28,
         max_lon=0.236,
         max_lat=51.686,
-        tags={"comment": "test changeset"},
+        tags=[{"key": "comment", "value": "test changeset"}],
         comments=[],
         open=False
     )
@@ -52,14 +52,14 @@ def test_read_changesets(mock_changeset):
             min_lat=51.2,
             max_lat=51.7,
             user="test_user",
-            created_after=datetime(2024, 1, 1),
-            created_before=datetime(2024, 2, 1),
+            created_after=datetime(2024, 1, 1, tzinfo=UTC),
+            created_before=datetime(2024, 2, 1, tzinfo=UTC),
             limit=10,
             offset=0
         )
 
 def test_get_oldest_changeset():
-    test_timestamp = datetime.utcnow() - timedelta(days=365)
+    test_timestamp = datetime.now(UTC) - timedelta(days=365)
     
     with patch('osm_changeset_loader.db.get_oldest_changeset_timestamp') as mock_oldest:
         # Test with existing changeset
@@ -75,24 +75,23 @@ def test_get_oldest_changeset():
         assert response.json()["oldest_changeset_timestamp"] is None
 
 def test_get_mapper_statistics():
-    MockStat = type('MockStat', (), {
-        'user': str,
-        'changeset_count': int,
-        'last_change': datetime,
-        'changeset_ids': List[int]
-    })
+    class MockStat(NamedTuple):
+        user: str
+        changeset_count: int
+        last_change: datetime
+        changeset_ids: List[int]
     
     mock_stats = [
         MockStat(
             user="mapper1",
             changeset_count=5,
-            last_change=datetime.utcnow(),
+            last_change=datetime.now(UTC),
             changeset_ids=[1,2,3,4,5]
         ),
         MockStat(
             user="mapper2",
             changeset_count=3,
-            last_change=datetime.utcnow() - timedelta(days=1),
+            last_change=datetime.now(UTC) - timedelta(days=1),
             changeset_ids=[6,7,8]
         )
     ]
@@ -123,7 +122,7 @@ def test_invalid_parameters():
     # Test invalid latitude
     response = client.get("/changesets/", params={"min_lat": -100})
     assert response.status_code == 422
-    assert "latitude" in response.text.lower()
+    assert "Input should be greater than or equal to -90" in response.text
     
     # Test missing bbox params for mappers endpoint
     response = client.get("/mappers/")
