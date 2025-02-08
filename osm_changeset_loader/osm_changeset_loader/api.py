@@ -7,7 +7,7 @@ from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
 from .model import Changeset
-from .db import query_changesets
+from .db import query_changesets, get_oldest_changeset_timestamp
 
 
 class ChangesetResponse(BaseModel):
@@ -66,7 +66,13 @@ async def get_changesets(
 
 @app.get("/oldest")
 async def get_oldest_changeset():
-    # New endpoint to get the timestamp for the oldest changeset AI!
+    """
+    Get the timestamp of the oldest changeset in the database.
+    Returns:
+        dict: Dictionary with the oldest changeset timestamp or null if no changesets exist
+    """
+    timestamp = get_oldest_changeset_timestamp()
+    return {"oldest_changeset_timestamp": timestamp.isoformat() if timestamp else None}
 
 
 if __name__ == "__main__":
