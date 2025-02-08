@@ -7,7 +7,7 @@ from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
 from .model import Changeset
-from .db import query_changesets, get_oldest_changeset_timestamp
+from .db import query_changesets, get_oldest_changeset_timestamp, get_mapper_statistics
 
 
 class ChangesetResponse(BaseModel):
@@ -75,7 +75,26 @@ async def get_oldest_changeset():
     return {"oldest_changeset_timestamp": timestamp.isoformat() if timestamp else None}
 
 
-# A new endpoint that retrieves all unique mappers with number of changes and date of most recent change for a bounding box. We may need new indices on the db AI!
+@app.get("/mappers/")
+async def get_mappers(
+    min_lon: float = Query(..., description="Minimum longitude"),
+    max_lon: float = Query(..., description="Maximum longitude"),
+    min_lat: float = Query(..., description="Minimum latitude"),
+    max_lat: float = Query(..., description="Maximum latitude")
+):
+    """
+    Retrieve all unique mappers with number of changes and date of most recent change for a bounding box.
+    """
+    mapper_stats = get_mapper_statistics(min_lon, max_lon, min_lat, max_lat)
+    return [
+        {
+            "user": stat.user,
+            "changeset_count": stat.changeset_count,
+            "last_change": stat.last_change.isoformat()
+        }
+        for stat in mapper_stats
+    ]
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -3,7 +3,7 @@ Database convenience functions.
 """
 
 from typing import List, Optional
-from sqlalchemy import create_engine, and_
+from sqlalchemy import create_engine, and_, func
 from sqlalchemy.orm import Session
 from .model import Changeset, Metadata
 
@@ -83,3 +83,21 @@ def get_oldest_changeset_timestamp(db_url=DB_URL):
     session = get_db_session(db_url)
     oldest = session.query(Changeset.created_at).order_by(Changeset.created_at).first()
     return oldest[0] if oldest else None
+
+def get_mapper_statistics(min_lon: float, max_lon: float, min_lat: float, max_lat: float, db_url=DB_URL):
+    """
+    Get mapper statistics within a bounding box.
+    """
+    session = get_db_session(db_url)
+    return session.query(
+        Changeset.user,
+        func.count(Changeset.id).label('changeset_count'),
+        func.max(Changeset.created_at).label('last_change')
+    ).filter(
+        and_(
+            Changeset.min_lon >= min_lon,
+            Changeset.max_lon <= max_lon,
+            Changeset.min_lat >= min_lat,
+            Changeset.max_lat <= max_lat
+        )
+    ).group_by(Changeset.user).all()
