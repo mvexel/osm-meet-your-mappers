@@ -19,9 +19,6 @@ replication_client = ReplicationClient(config)
 # Global bounding box
 BBOX = [-180, -90, 180, 90]
 
-# Number of threads for historical processing
-HISTORICAL_THREADS = 4
-
 # Setup logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -122,7 +119,7 @@ def process_recent_changes(stop_event):
         latest_path = replication_client.get_remote_state()
         if not latest_path:
             logging.error("Failed to get remote state, retrying in 60 seconds")
-            time.sleep(60)
+            time.sleep(config.SLEEP_INTERVAL)
             continue
 
         local_state = get_local_state()
@@ -139,7 +136,7 @@ def process_recent_changes(stop_event):
 
             current_sequence -= 1
 
-        time.sleep(60)  # Wait before next check
+        time.sleep(config.SLEEP_INTERVAL)  # Wait before next check
 
 
 def process_historical_range(start_sequence, end_sequence, stop_event):
@@ -158,24 +155,29 @@ def process_historical_range(start_sequence, end_sequence, stop_event):
 
         current_sequence -= 1
 
+
 def process_historical_changes(stop_event):
     """
     Process historical changes going backwards in time using multiple threads.
     """
-    with ThreadPoolExecutor(max_workers=HISTORICAL_THREADS) as executor:
+    with ThreadPoolExecutor(max_workers=config.HISTORICAL_THREADS) as executor:
         while not stop_event.is_set():
             local_state = get_local_state()
             if local_state.sequence <= 1:
                 logging.info("Reached beginning of history")
                 return
 
-            chunk_size = 1000 // HISTORICAL_THREADS
-            for i in range(HISTORICAL_THREADS):
+            chunk_size = 1000 // config.HISTORICAL_THREADS
+            for i in range(config.HISTORICAL_THREADS):
                 start_sequence = max(1, local_state.sequence - i * chunk_size - 1)
                 end_sequence = max(1, start_sequence - chunk_size + 1)
-                executor.submit(process_historical_range, start_sequence, end_sequence, stop_event)
+                executor.submit(
+                    process_historical_range, start_sequence, end_sequence, stop_event
+                )
 
-            time.sleep(60)  # Wait before starting next batch of threads
+            time.sleep(
+                config.SLEEP_INTERVAL
+            )  # Wait before starting next batch of threads
 
 
 def catch_up():
