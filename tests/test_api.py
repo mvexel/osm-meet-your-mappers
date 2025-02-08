@@ -26,8 +26,8 @@ class TestChangesetAPI:
         """Create a consistent mock changeset for testing."""
         return {
             'id': 123,
-            'created_at': TEST_CREATED_AFTER,
-            'closed_at': TEST_CREATED_BEFORE,
+            'created_at': TEST_CREATED_AFTER.isoformat(),
+            'closed_at': TEST_CREATED_BEFORE.isoformat(),
             'user': TEST_USER,
             'uid': 456,
             'min_lon': -0.489,
@@ -80,7 +80,7 @@ class TestChangesetAPI:
         """Test retrieving the oldest changeset timestamp."""
         with patch('osm_changeset_loader.db.get_oldest_changeset_timestamp') as mock_oldest:
             # Arrange: Test with existing changeset
-            test_timestamp = datetime(2024, 1, 1, tzinfo=UTC)
+            test_timestamp = "2019-08-29T13:18:29"  # Matches actual API response format
             mock_oldest.return_value = test_timestamp
             
             # Act
@@ -107,15 +107,15 @@ class TestChangesetAPI:
             mock_stats = [
                 {
                     "user": "mapper1",
-                    "changeset_count": 2,
-                    "last_change": datetime(2024, 1, 15, tzinfo=UTC),
-                    "changeset_ids": [1, 2]
+                    "changeset_count": 6,
+                    "last_change": "2025-02-03T14:11:37",
+                    "changeset_ids": [162216327, 162217284, 162217100, 162216663, 162216138, 162216283]
                 },
                 {
                     "user": "mapper2",
-                    "changeset_count": 1,
-                    "last_change": datetime(2024, 1, 10, tzinfo=UTC),
-                    "changeset_ids": [3]
+                    "changeset_count": 2,
+                    "last_change": "2025-02-03T14:11:37",
+                    "changeset_ids": [162102445, 162102165]
                 }
             ]
             mock_mapper_stats.return_value = mock_stats
