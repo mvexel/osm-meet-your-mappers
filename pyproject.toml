@@ -35,6 +35,7 @@ dependencies = [
 [project.scripts]
 osm-changeset-loader = "osm_changeset_loader.api:main"
 osm-changeset-catchup = "catch_up.py:main"
+osm-changeset-rebuild-db = "osm_changeset_loader.db:rebuild_database"
 
 [tool.setuptools.packages.find]
 where = ["osm_changeset_loader"]
