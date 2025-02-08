@@ -106,16 +106,18 @@ class Changeset(Base):
         ]
 
         # Parse discussion comments
-        changeset.comments = [
-            ChangesetComment(
-                uid=int(comment.attrib["uid"]),
-                user=comment.attrib["user"],
-                date=comment.attrib["date"],
-                text=comment.find("text").text,
-            )
-            for comment in elem.find("discussion").findall("comment")
-            if elem.find("discussion") is not None
-        ]
+        discussion = elem.find("discussion")
+        changeset.comments = []
+        if discussion is not None:
+            changeset.comments = [
+                ChangesetComment(
+                    uid=int(comment.attrib["uid"]),
+                    user=comment.attrib["user"],
+                    date=comment.attrib["date"],
+                    text=comment.find("text").text if comment.find("text") is not None else None,
+                )
+                for comment in discussion.findall("comment")
+            ]
 
         # Calculate centroid and bbox area
         changeset.centroid_lon = (changeset.min_lon + changeset.max_lon) / 2
