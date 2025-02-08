@@ -208,7 +208,8 @@ async def get_mappers(
         {
             "user": stat.user,
             "changeset_count": stat.changeset_count,
-            "last_change": stat.last_change.isoformat()
+            "last_change": stat.last_change.isoformat(),
+            "changeset_ids": stat.changeset_ids
         }
         for stat in mapper_stats
     ]

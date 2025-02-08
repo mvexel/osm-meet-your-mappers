@@ -94,7 +94,8 @@ def get_mapper_statistics(min_lon: float, max_lon: float, min_lat: float, max_la
     return session.query(
         Changeset.user,
         func.count(Changeset.id).label('changeset_count'),
-        func.max(Changeset.created_at).label('last_change')
+        func.max(Changeset.created_at).label('last_change'),
+        func.array_agg(Changeset.id).label('changeset_ids')
     ).filter(
         and_(
             # Changeset min coordinates must be greater than or equal to query min
