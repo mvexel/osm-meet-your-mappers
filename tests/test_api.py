@@ -25,7 +25,23 @@ def mock_changeset():
     mock_cs.tags = [{"key": "comment", "value": "test changeset"}]
     mock_cs.comments = []
     mock_cs.open = False
-    mock_cs._sa_instance_state = MagicMock()  # Add SQLAlchemy state
+    
+    # Configure the mock to return a dictionary-like representation
+    mock_cs.__dict__ = {
+        'id': 123,
+        'created_at': datetime.now(UTC) - timedelta(days=1),
+        'closed_at': datetime.now(UTC),
+        'user': "test_user",
+        'uid': 456,
+        'min_lon': -0.489,
+        'min_lat': 51.28,
+        'max_lon': 0.236,
+        'max_lat': 51.686,
+        'tags': [{"key": "comment", "value": "test changeset"}],
+        'comments': [],
+        'open': False
+    }
+    
     return mock_cs
 
 def test_read_changesets(mock_changeset):
