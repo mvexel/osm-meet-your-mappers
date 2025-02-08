@@ -33,7 +33,7 @@ dependencies = [
 ]
 
 [project.scripts]
-osm-changeset-loader = "osm_changeset_loader.osm_changeset_loader.api:main"
+osm-changeset-loader = "osm_changeset_loader.api:main"
 osm-changeset-catchup = "catch_up.py:main"
 
 [tool.setuptools.packages.find]

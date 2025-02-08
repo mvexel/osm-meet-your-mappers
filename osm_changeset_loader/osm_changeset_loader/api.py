@@ -75,6 +75,8 @@ async def get_oldest_changeset():
     return {"oldest_changeset_timestamp": timestamp.isoformat() if timestamp else None}
 
 
+# A new endpoint that retrieves all unique mappers with number of changes and date of most recent change for a bounding box. We may need new indices on the db AI!
+
 if __name__ == "__main__":
     import uvicorn
 
