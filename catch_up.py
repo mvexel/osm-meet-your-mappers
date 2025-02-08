@@ -162,7 +162,7 @@ def process_historical_changes(stop_event):
 
             current_sequence -= 1
 
-        time.sleep(60)  # Pause between chunks
+        # time.sleep(60)  # Pause between chunks
 
 
 def catch_up():
