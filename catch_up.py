@@ -179,27 +179,30 @@ def process_historical_range(start_sequence, end_sequence, stop_event):
         current_sequence -= 1
 
 
-def process_historical_changes(stop_event):
+def process_historical_changes(stop_event, thread_id):
     """
-    Process historical changes going backwards in time.
+    Process historical changes going backwards in time for a specific thread.
     """
     while not stop_event.is_set():
         local_state = get_local_state()
         if local_state.sequence <= 1:
-            logging.info("Reached beginning of history")
+            logging.info(f"Thread {thread_id} reached beginning of history")
             return
 
-        chunk_size = 1000 // HISTORICAL_THREADS
-        start_sequence = local_state.sequence
+        # Each thread processes a different chunk of sequences
+        chunk_size = 1000
+        start_sequence = local_state.sequence - (thread_id * chunk_size)
         end_sequence = max(1, start_sequence - chunk_size)
 
+        if start_sequence <= 0:
+            logging.info(f"Thread {thread_id} has no more work to do")
+            return
+
+        logging.info(f"Thread {thread_id} processing sequences {start_sequence} to {end_sequence}")
         process_historical_range(start_sequence, end_sequence, stop_event)
 
-        # Update local state after processing
-        new_local_state = get_local_state()
-        if new_local_state.sequence == local_state.sequence:
-            # If no progress was made, sleep before next attempt
-            time.sleep(config.SLEEP_INTERVAL)
+        # Wait a bit before checking for more work
+        time.sleep(1)
 
 
 def catch_up():
@@ -208,33 +211,47 @@ def catch_up():
     """
     stop_event = threading.Event()
 
+    # Start recent changes thread
     recent_thread = threading.Thread(
         target=process_recent_changes, args=(stop_event,), name="recent-changes"
     )
-    
+    recent_thread.start()
+
+    # Start historical processing threads
     historical_threads = []
     for i in range(HISTORICAL_THREADS):
         thread = threading.Thread(
             target=process_historical_changes, 
-            args=(stop_event,), 
+            args=(stop_event, i), 
             name=f"historical-changes-{i}"
         )
+        thread.start()
         historical_threads.append(thread)
 
-    recent_thread.start()
-    for thread in historical_threads:
-        thread.start()
-
     try:
-        recent_thread.join()
-        for thread in historical_threads:
-            thread.join()
+        # Monitor threads and restart historical ones if they finish early
+        while not stop_event.is_set():
+            for i, thread in enumerate(historical_threads):
+                if not thread.is_alive():
+                    logging.info(f"Restarting historical thread {i}")
+                    new_thread = threading.Thread(
+                        target=process_historical_changes,
+                        args=(stop_event, i),
+                        name=f"historical-changes-{i}"
+                    )
+                    new_thread.start()
+                    historical_threads[i] = new_thread
+            
+            time.sleep(5)  # Check thread status every 5 seconds
+
     except KeyboardInterrupt:
         logging.info("Stopping threads...")
         stop_event.set()
-        recent_thread.join()
-        for thread in historical_threads:
-            thread.join()
+    
+    # Wait for all threads to finish
+    recent_thread.join()
+    for thread in historical_threads:
+        thread.join()
 
 
 def handle_exit(signum, frame):
