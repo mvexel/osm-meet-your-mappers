@@ -20,6 +20,7 @@ Requires-Dist: sqlalchemy>=2.0.0
 Requires-Dist: psycopg2-binary>=2.9.0
 Requires-Dist: requests>=2.28.0
 Requires-Dist: pydantic>=2.0.0
+Requires-Dist: sqlalchemy-utils>=0.41.0
 
 # Set up the database
 

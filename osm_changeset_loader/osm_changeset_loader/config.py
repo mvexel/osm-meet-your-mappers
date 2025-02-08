@@ -1,6 +1,8 @@
 """Configuration settings for the application."""
+
 from typing import Tuple
 from dataclasses import dataclass
+
 
 @dataclass
 class Config:
@@ -9,3 +11,4 @@ class Config:
     REPLICATION_URL: str = "https://planet.osm.org/replication/changesets"
     CHUNK_SIZE: int = 1000
     SLEEP_INTERVAL: int = 60
+    HISTORICAL_THREADS = 8

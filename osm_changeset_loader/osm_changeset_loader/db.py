@@ -5,7 +5,7 @@ Database convenience functions.
 from typing import List, Optional
 from sqlalchemy import create_engine, and_, func
 from sqlalchemy.orm import Session
-from sqlalchemy_utils import database_exists, create_database, drop_database
+from sqlalchemy_utils import database_exists, drop_database, create_database
 from .model import Changeset, Metadata, Base
 
 DB_URL = "postgresql://mvexel@localhost:5432/osm"
@@ -117,20 +117,21 @@ def get_mapper_statistics(
         .all()
     )
 
+
 def rebuild_database(db_url=DB_URL):
     """
     Drop and recreate the entire database, then create all tables.
-    
+
     WARNING: This will delete all existing data in the database!
     """
     engine = get_db_engine(db_url)
-    
+
     # Drop the database if it exists
     if database_exists(db_url):
         drop_database(db_url)
-    
+
     # Create the database
     create_database(db_url)
-    
+
     # Create all tables defined in the Base metadata
     Base.metadata.create_all(engine)
