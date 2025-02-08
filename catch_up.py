@@ -181,62 +181,60 @@ def process_historical_range(start_sequence, end_sequence, stop_event):
 
 def process_historical_changes(stop_event):
     """
-    Process historical changes going backwards in time using multiple threads.
+    Process historical changes going backwards in time.
     """
-    with ThreadPoolExecutor(max_workers=HISTORICAL_THREADS) as executor:
-        while not stop_event.is_set():
-            local_state = get_local_state()
-            if local_state.sequence <= 1:
-                logging.info("Reached beginning of history")
-                return
+    while not stop_event.is_set():
+        local_state = get_local_state()
+        if local_state.sequence <= 1:
+            logging.info("Reached beginning of history")
+            return
 
-            chunk_size = 1000
-            start_sequence = local_state.sequence
-            end_sequence = max(1, start_sequence - chunk_size * HISTORICAL_THREADS)
+        chunk_size = 1000 // HISTORICAL_THREADS
+        start_sequence = local_state.sequence
+        end_sequence = max(1, start_sequence - chunk_size)
 
-            futures = []
-            for i in range(HISTORICAL_THREADS):
-                thread_start = max(1, start_sequence - i * chunk_size)
-                thread_end = max(1, thread_start - chunk_size)
-                future = executor.submit(process_historical_range, thread_start, thread_end, stop_event)
-                futures.append(future)
+        process_historical_range(start_sequence, end_sequence, stop_event)
 
-            # Wait for all threads to complete
-            for future in as_completed(futures):
-                if future.exception():
-                    logging.error(f"Thread raised an exception: {future.exception()}")
-
-            # Update local state after processing
-            new_local_state = get_local_state()
-            if new_local_state.sequence == local_state.sequence:
-                # If no progress was made, sleep before next attempt
-                time.sleep(config.SLEEP_INTERVAL)
+        # Update local state after processing
+        new_local_state = get_local_state()
+        if new_local_state.sequence == local_state.sequence:
+            # If no progress was made, sleep before next attempt
+            time.sleep(config.SLEEP_INTERVAL)
 
 
 def catch_up():
     """
-    Run two threads: one for recent changes and one for historical backfill.
+    Run multiple threads: one for recent changes and multiple for historical backfill.
     """
     stop_event = threading.Event()
 
     recent_thread = threading.Thread(
         target=process_recent_changes, args=(stop_event,), name="recent-changes"
     )
-    historical_thread = threading.Thread(
-        target=process_historical_changes, args=(stop_event,), name="historical-changes"
-    )
+    
+    historical_threads = []
+    for i in range(HISTORICAL_THREADS):
+        thread = threading.Thread(
+            target=process_historical_changes, 
+            args=(stop_event,), 
+            name=f"historical-changes-{i}"
+        )
+        historical_threads.append(thread)
 
     recent_thread.start()
-    historical_thread.start()
+    for thread in historical_threads:
+        thread.start()
 
     try:
         recent_thread.join()
-        historical_thread.join()
+        for thread in historical_threads:
+            thread.join()
     except KeyboardInterrupt:
         logging.info("Stopping threads...")
         stop_event.set()
         recent_thread.join()
-        historical_thread.join()
+        for thread in historical_threads:
+            thread.join()
 
 
 def handle_exit(signum, frame):
