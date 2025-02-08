@@ -1,20 +1,16 @@
-import gzip
 import logging
 import signal
 import threading
 import time
 from datetime import datetime
-from typing import Optional
 from xml.etree.ElementTree import fromstring
 
-import requests
+from osm_changeset_loader.config import Config
+from osm_changeset_loader.db import create_tables, get_db_session
+from osm_changeset_loader.model import Changeset, Metadata
+from osm_changeset_loader.path import Path
+from osm_changeset_loader.replication import ReplicationClient
 from sqlalchemy.dialects.postgresql import insert
-
-from osm_changeset_loader.osm_changeset_loader.config import Config
-from osm_changeset_loader.osm_changeset_loader.db import create_tables, get_db_session
-from osm_changeset_loader.osm_changeset_loader.model import Changeset, Metadata
-from osm_changeset_loader.osm_changeset_loader.path import Path
-from osm_changeset_loader.osm_changeset_loader.replication import ReplicationClient
 
 config = Config()
 replication_client = ReplicationClient(config)

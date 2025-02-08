@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./osm_changeset_loader"
+    ]
+}
