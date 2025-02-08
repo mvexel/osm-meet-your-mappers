@@ -4,6 +4,7 @@ import threading
 import time
 from datetime import datetime
 from xml.etree.ElementTree import fromstring
+from concurrent.futures import ThreadPoolExecutor
 
 from osm_changeset_loader.config import Config
 from osm_changeset_loader.db import create_tables, get_db_session
@@ -17,6 +18,9 @@ replication_client = ReplicationClient(config)
 
 # Global bounding box
 BBOX = [-180, -90, 180, 90]
+
+# Number of threads for historical processing
+HISTORICAL_THREADS = 4
 
 # Setup logging
 logging.basicConfig(
@@ -138,31 +142,40 @@ def process_recent_changes(stop_event):
         time.sleep(60)  # Wait before next check
 
 
+def process_historical_range(start_sequence, end_sequence, stop_event):
+    """
+    Process a range of historical changes.
+    """
+    current_sequence = start_sequence
+    while current_sequence >= end_sequence and not stop_event.is_set():
+        current_path = Path(sequence=current_sequence)
+        logging.info(f"Processing historical sequence {current_sequence}")
+
+        changesets = replication_client.get_changesets(current_path)
+        if changesets:
+            if insert_changesets(changesets):
+                set_local_state(current_path)
+
+        current_sequence -= 1
+
 def process_historical_changes(stop_event):
     """
-    Process historical changes going backwards in time.
+    Process historical changes going backwards in time using multiple threads.
     """
-    while not stop_event.is_set():
-        local_state = get_local_state()
-        if local_state.sequence <= 1:
-            logging.info("Reached beginning of history")
-            return
+    with ThreadPoolExecutor(max_workers=HISTORICAL_THREADS) as executor:
+        while not stop_event.is_set():
+            local_state = get_local_state()
+            if local_state.sequence <= 1:
+                logging.info("Reached beginning of history")
+                return
 
-        target_sequence = max(1, local_state.sequence - 1000)  # Process in chunks
-        current_sequence = local_state.sequence - 1
+            chunk_size = 1000 // HISTORICAL_THREADS
+            for i in range(HISTORICAL_THREADS):
+                start_sequence = max(1, local_state.sequence - i * chunk_size - 1)
+                end_sequence = max(1, start_sequence - chunk_size + 1)
+                executor.submit(process_historical_range, start_sequence, end_sequence, stop_event)
 
-        while current_sequence >= target_sequence and not stop_event.is_set():
-            current_path = Path(sequence=current_sequence)
-            logging.info(f"Processing historical sequence {current_sequence}")
-
-            changesets = replication_client.get_changesets(current_path)
-            if changesets:
-                if insert_changesets(changesets):
-                    set_local_state(current_path)
-
-            current_sequence -= 1
-
-        # time.sleep(60)  # Pause between chunks
+            time.sleep(60)  # Wait before starting next batch of threads
 
 
 def catch_up():
