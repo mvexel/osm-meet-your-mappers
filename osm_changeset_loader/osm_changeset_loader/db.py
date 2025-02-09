@@ -89,20 +89,31 @@ def get_oldest_changeset_timestamp(db_url=DB_URL):
 
 
 def get_mapper_statistics(
-    min_lon: float, max_lon: float, min_lat: float, max_lat: float, db_url=DB_URL
+    min_lon: float,
+    max_lon: float,
+    min_lat: float,
+    max_lat: float,
+    db_url=DB_URL,
 ):
     """
     Get mapper statistics within a bounding box.
     Only counts changesets whose bounding boxes are completely contained within
     the query bounding box.
+
+    Args:
+        min_lon: Minimum longitude of bounding box
+        max_lon: Maximum longitude of bounding box
+        min_lat: Minimum latitude of bounding box
+        max_lat: Maximum latitude of bounding box
+        db_url: Database connection URL
     """
     session = get_db_session(db_url)
     return (
         session.query(
             Changeset.user,
             func.count(Changeset.id).label("changeset_count"),
+            func.min(Changeset.created_at).label("first_change"),
             func.max(Changeset.created_at).label("last_change"),
-            func.array_agg(Changeset.id).label("changeset_ids"),
         )
         .filter(
             and_(
