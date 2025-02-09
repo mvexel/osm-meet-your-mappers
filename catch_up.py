@@ -64,18 +64,23 @@ def get_latest_changeset_id() -> int:
         return latest[0] if latest else 0
 
 
-def estimate_start_sequence() -> int:
+def get_sequence_for_changeset(changeset_id: int) -> int:
     """
-    Estimate the replication sequence number from the latest changeset ID.
-    Assumes ~1000 changesets per minutely sequence.
+    Get the sequence number for a given changeset ID by querying the replication API.
+    Returns the sequence number or None if not found.
     """
-    latest_id = get_latest_changeset_id()
-    remote_state = replication_client.get_remote_state().sequence
-
-    # Conservative buffer estimate
-    buffer = 1000
-    estimated_start = max(1, remote_state - (latest_id // buffer))
-    return estimated_start
+    # Start from current state and work backwards
+    current = replication_client.get_remote_state()
+    while current and current.sequence > 0:
+        changesets = replication_client.get_changesets(current)
+        if changesets:
+            if min(cs.id for cs in changesets) <= changeset_id <= max(cs.id for cs in changesets):
+                return current.sequence
+            # If we've gone too far back
+            if min(cs.id for cs in changesets) < changeset_id:
+                return current.sequence + 1
+        current = Path(sequence=current.sequence - 1)
+    return 1
 
 
 # ------------------------------------------------------------------------------
@@ -115,17 +120,23 @@ def process_sequence(sequence: int) -> bool:
     return False
 
 
-def recent_worker(stop_event: threading.Event, start: int, end: int):
+def recent_worker(stop_event: threading.Event):
     """
-    Process recent changesets in **ascending** order for consistency.
+    Continuously process the most recent changeset sequence.
+    Runs every minute to stay up to date.
     """
-    for sequence in range(start, end + 1):
-        if stop_event.is_set():
-            break
-        success = process_sequence(sequence)
-        if not success:
-            logging.error(f"Failed to process sequence {sequence}, retrying later.")
-        time.sleep(0.1)  # Avoid hammering the API
+    while not stop_event.is_set():
+        try:
+            current = replication_client.get_remote_state()
+            if current:
+                success = process_sequence(current.sequence)
+                if not success:
+                    logging.error(f"Failed to process sequence {current.sequence}")
+            # Wait for next minute
+            time.sleep(60)
+        except Exception as e:
+            logging.error(f"Error in recent worker: {e}")
+            time.sleep(60)  # Wait before retry
 
 
 def historical_worker(stop_event: threading.Event, task_queue: queue.Queue):
@@ -162,16 +173,19 @@ def catch_up():
     signal.signal(signal.SIGTERM, lambda s, f: stop_event.set())
     signal.signal(signal.SIGINT, lambda s, f: stop_event.set())
 
-    # Determine sequence numbers
-    historical_start = estimate_start_sequence()
-    remote_state = replication_client.get_remote_state().sequence
+    # Get latest processed changeset and its sequence
+    latest_id = get_latest_changeset_id()
+    if latest_id:
+        historical_start = get_sequence_for_changeset(latest_id)
+        logging.info(f"Starting from changeset ID {latest_id} (sequence {historical_start})")
+    else:
+        historical_start = 1
+        logging.info("No existing changesets found, starting from beginning")
 
-    logging.info(f"Remote state: {remote_state}, Historical start: {historical_start}")
-
-    # Recent processing thread (for sequences from historical_start to remote_state)
+    # Recent processing thread
     recent_thread = threading.Thread(
         target=recent_worker,
-        args=(stop_event, historical_start, remote_state),
+        args=(stop_event,),
         name="recent-worker",
     )
     recent_thread.start()
