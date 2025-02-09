@@ -55,7 +55,7 @@ app = FastAPI()
     - Track recent mapping activity in an area
     - Monitor contributions from specific users
     """,
-    response_description="List of changesets matching the query parameters"
+    response_description="List of changesets matching the query parameters",
 )
 async def get_changesets(
     min_lon: Optional[float] = Query(
@@ -63,58 +63,53 @@ async def get_changesets(
         description="Minimum longitude of bounding box",
         example=-0.489,
         ge=-180,
-        le=180
+        le=180,
     ),
     max_lon: Optional[float] = Query(
         None,
         description="Maximum longitude of bounding box",
         example=0.236,
         ge=-180,
-        le=180
+        le=180,
     ),
     min_lat: Optional[float] = Query(
         None,
         description="Minimum latitude of bounding box",
         example=51.28,
         ge=-90,
-        le=90
+        le=90,
     ),
     max_lat: Optional[float] = Query(
         None,
         description="Maximum latitude of bounding box",
         example=51.686,
         ge=-90,
-        le=90
+        le=90,
     ),
     user: Optional[str] = Query(
         None,
         description="Filter by OpenStreetMap username",
         example="JohnDoe",
-        min_length=1
+        min_length=1,
     ),
     created_after: Optional[datetime] = Query(
         None,
         description="Filter changesets created after this date (ISO format)",
-        example="2024-01-01T00:00:00Z"
+        example="2024-01-01T00:00:00Z",
     ),
     created_before: Optional[datetime] = Query(
         None,
         description="Filter changesets created before this date (ISO format)",
-        example="2024-02-01T00:00:00Z"
+        example="2024-02-01T00:00:00Z",
     ),
     limit: int = Query(
         100,
         description="Maximum number of results to return",
         example=100,
         ge=1,
-        le=1000
+        le=1000,
     ),
-    offset: int = Query(
-        0,
-        description="Offset for pagination",
-        example=0,
-        ge=0
-    ),
+    offset: int = Query(0, description="Offset for pagination", example=0, ge=0),
 ):
     """
     Get changesets with optional filters.
@@ -143,7 +138,7 @@ async def get_changesets(
     - Checking when data collection began
     - Planning historical analysis
     """,
-    response_description="Timestamp of the oldest changeset in ISO format"
+    response_description="Timestamp of the oldest changeset in ISO format",
 )
 async def get_oldest_changeset():
     """
@@ -168,7 +163,7 @@ async def get_oldest_changeset():
     
     The bounding box parameters are required to limit the geographic scope of the query.
     """,
-    response_description="List of mapper statistics including changeset counts and last activity"
+    response_description="List of mapper statistics including changeset counts and last activity",
 )
 async def get_mappers(
     min_lon: float = Query(
@@ -176,29 +171,29 @@ async def get_mappers(
         description="Minimum longitude of bounding box",
         example=-114.053,
         ge=-180,
-        le=180
+        le=180,
     ),
     max_lon: float = Query(
         ...,
         description="Maximum longitude of bounding box",
         example=-109.041,
         ge=-180,
-        le=180
+        le=180,
     ),
     min_lat: float = Query(
         ...,
         description="Minimum latitude of bounding box",
         example=36.998,
         ge=-90,
-        le=90
+        le=90,
     ),
     max_lat: float = Query(
         ...,
         description="Maximum latitude of bounding box",
         example=42.002,
         ge=-90,
-        le=90
-    )
+        le=90,
+    ),
 ):
     """
     Retrieve all unique mappers with number of changes and date of most recent change for a bounding box.
@@ -208,8 +203,8 @@ async def get_mappers(
         {
             "user": stat.user,
             "changeset_count": stat.changeset_count,
+            "first_change": stat.first_change.isoformat(),
             "last_change": stat.last_change.isoformat(),
-            "changeset_ids": stat.changeset_ids
         }
         for stat in mapper_stats
     ]
