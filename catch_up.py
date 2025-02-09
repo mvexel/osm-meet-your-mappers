@@ -1,19 +1,18 @@
 import logging
+import queue
 import signal
 import threading
 import time
-import queue
-from datetime import datetime
-from xml.etree.ElementTree import fromstring
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from xml.etree.ElementTree import fromstring
 
 from osm_changeset_loader.config import Config
 from osm_changeset_loader.db import create_tables, get_db_session
-from osm_changeset_loader.model import Changeset, ChangesetTag, ChangesetComment
+from osm_changeset_loader.model import Changeset, ChangesetComment, ChangesetTag
 from osm_changeset_loader.path import Path
 from osm_changeset_loader.replication import ReplicationClient
 from sqlalchemy.dialects.postgresql import insert
-from contextlib import contextmanager
 
 # ------------------------------------------------------------------------------
 # Configuration and Globals
@@ -74,7 +73,11 @@ def get_sequence_for_changeset(changeset_id: int) -> int:
     while current and current.sequence > 0:
         changesets = replication_client.get_changesets(current)
         if changesets:
-            if min(cs.id for cs in changesets) <= changeset_id <= max(cs.id for cs in changesets):
+            if (
+                min(cs.id for cs in changesets)
+                <= changeset_id
+                <= max(cs.id for cs in changesets)
+            ):
                 return current.sequence
             # If we've gone too far back
             if min(cs.id for cs in changesets) < changeset_id:
@@ -177,7 +180,9 @@ def catch_up():
     latest_id = get_latest_changeset_id()
     if latest_id:
         historical_start = get_sequence_for_changeset(latest_id)
-        logging.info(f"Starting from changeset ID {latest_id} (sequence {historical_start})")
+        logging.info(
+            f"Starting from changeset ID {latest_id} (sequence {historical_start})"
+        )
     else:
         historical_start = 1
         logging.info("No existing changesets found, starting from beginning")
