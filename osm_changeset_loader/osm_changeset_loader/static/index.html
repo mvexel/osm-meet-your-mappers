@@ -60,7 +60,6 @@
             <thead>
                 <tr>
                     <th data-sort="username">Username</th>
-                    <th data-sort="changesets">Changesets</th>
                     <th data-sort="lastEdit">Last Edit</th>
                 </tr>
             </thead>
@@ -159,20 +158,11 @@
                 messageLink.title = 'Send message';
                 usernameCell.appendChild(messageLink);
 
-                // Changesets cell
-                const changesetsCell = document.createElement('td');
-                const changesetLinks = mapper.changesets.map(id => {
-                    return `<a href="https://osmcha.org/changesets/${id}" target="_blank">OSMCha</a> / ` +
-                           `<a href="https://www.openstreetmap.org/changeset/${id}" target="_blank">OSM</a>`;
-                }).join('<br>');
-                changesetsCell.innerHTML = `<div class="changeset-links">${changesetLinks}</div>`;
-
                 // Last edit cell
                 const lastEditCell = document.createElement('td');
                 lastEditCell.textContent = new Date(mapper.last_edit).toLocaleString();
 
                 row.appendChild(usernameCell);
-                row.appendChild(changesetsCell);
                 row.appendChild(lastEditCell);
                 tbody.appendChild(row);
             });
@@ -192,10 +182,6 @@
                             aVal = a.cells[0].querySelector('a').textContent;
                             bVal = b.cells[0].querySelector('a').textContent;
                             return aVal.localeCompare(bVal);
-                        case 'changesets':
-                            aVal = a.cells[1].querySelectorAll('a').length;
-                            bVal = b.cells[1].querySelectorAll('a').length;
-                            return bVal - aVal;
                         case 'lastEdit':
                             aVal = new Date(a.cells[2].textContent);
                             bVal = new Date(b.cells[2].textContent);
