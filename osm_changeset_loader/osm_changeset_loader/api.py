@@ -11,9 +11,12 @@ The API supports:
 """
 
 from fastapi import FastAPI, Query
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
+import os
 from .model import Changeset
 from .db import query_changesets, get_oldest_changeset_timestamp, get_mapper_statistics
 
@@ -38,6 +41,18 @@ class ChangesetResponse(BaseModel):
 
 
 app = FastAPI()
+
+# Get the directory containing this file
+current_dir = os.path.dirname(os.path.abspath(__file__))
+static_dir = os.path.join(current_dir, "static")
+
+# Mount the static directory
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+@app.get("/")
+async def root():
+    """Serve the main HTML page"""
+    return FileResponse(os.path.join(static_dir, "index.html"))
 
 
 @app.get(
