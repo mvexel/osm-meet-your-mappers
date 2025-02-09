@@ -1,0 +1,14 @@
+ [Unit]
+ Description=OSM Changeset Loader Service
+ After=network.target
+
+ [Service]
+ User=osm
+ Group=osm
+ ExecStart=/usr/local/bin/osm-changeset-loader
+ Restart=always
+ RestartSec=5
+ Environment="PYTHONUNBUFFERED=1"
+
+ [Install]
+ WantedBy=multi-user.target
