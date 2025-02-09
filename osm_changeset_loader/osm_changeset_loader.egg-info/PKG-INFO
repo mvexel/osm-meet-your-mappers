@@ -22,6 +22,19 @@ Requires-Dist: requests>=2.28.0
 Requires-Dist: pydantic>=2.0.0
 Requires-Dist: sqlalchemy-utils>=0.41.0
 
+# OSM Changeset Loader
+
+## Features
+
+ - Loads changeset data from OSM replication files
+ - Stores changesets, tags, and comments in PostgreSQL
+ - REST API for querying changesets and mapper statistics
+ - Supports filtering by:
+   - Geographic bounding box
+   - Time range
+   - User
+ - Provides mapper statistics for geographic areas
+
 # Set up the database
 
 ## Database Initialization
@@ -104,10 +117,106 @@ Returns a JSON array of changeset objects with the following fields:
 - `uid` (int): User ID
 - `min_lon`, `min_lat`, `max_lon`, `max_lat` (float): Bounding box coordinates
 - `open` (bool): Whether changeset is still open
-- `bbox_area_km2` (float): Area of bounding box in square kilometers
-- `centroid_lon`, `centroid_lat` (float): Centroid coordinates
 
 Interactive API documentation is available at:
 - http://localhost:8000/docs (Swagger UI)
 - http://localhost:8000/redoc (ReDoc)
 
+ 
+ ## Data Loading and Synchronization Scripts
+
+ ### Archive Loader Script
+
+ The `archive_loader.py` script allows you to bulk import historical changeset data from OSM archive files.
+
+ #### Usage
+ ```bash
+ python archive_loader.py <path_to_changeset_file.osm.bz2> <database_url>
+ ```
+
+ Optional arguments:
+ - `--batch-size`: Number of records to insert in each batch (default: 50,000)
+ - `--truncate`: Truncate tables before loading (default: True)
+ - `--from_date`: Start date for import (YYYYMMDD format)
+ - `--to_date`: End date for import (YYYYMMDD format)
+
+ Example:
+ ```bash
+ python archive_loader.py changesets-230101.osm.bz2 postgresql://user:pass@localhost/osm \
+     --from_date 20230101 --to_date 20230131
+ ```
+
+ ### Catch-up Script (Continuous Synchronization)
+
+ The `catch_up.py` script continuously synchronizes your local database with the latest OpenStreetMap changeset data.
+
+ #### Installation as a Systemd Service
+
+ 1. Create a systemd service file `/etc/systemd/system/osm-catch-up.service`:
+ ```ini
+ [Unit]
+ Description=OSM Changeset Catch-up Service
+ After=network.target postgresql.service
+
+ [Service]
+ Type=simple
+ User=osm
+ WorkingDirectory=/opt/osm-changeset-loader
+ ExecStart=/opt/osm-changeset-loader/venv/bin/python catch_up.py
+ Restart=on-failure
+ RestartSec=30
+
+ [Install]
+ WantedBy=multi-user.target
+ ```
+
+ 2. Enable and start the service:
+ ```bash
+ sudo systemctl daemon-reload
+ sudo systemctl enable osm-catch-up
+ sudo systemctl start osm-catch-up
+ ```
+
+ #### Configuration
+
+ Configure the catch-up process in `osm_changeset_loader/config.py`:
+ - `REPLICATION_URL`: Base URL for OSM replication data
+ - `SLEEP_INTERVAL`: Time between checking for new changesets
+ - `HISTORICAL_THREADS`: Number of threads for processing historical data
+
+ #### Manual Execution
+
+ You can also run the script directly:
+ ```bash
+ python catch_up.py
+ ```
+
+ The script will:
+ - Continuously fetch and process recent changesets
+ - Backfill historical data using multiple threads
+ - Gracefully handle interruptions
+ - Automatically restart processing if a thread completes its work
+
+ #### Monitoring
+
+ - Check service status: `sudo systemctl status osm-catch-up`
+ - View logs: `journalctl -u osm-catch-up`
+
+ ## Development
+
+ Create virtual environment:
+ ```bash
+ python3 -m venv venv
+ source venv/bin/activate
+ pip install -e .
+ ```
+
+ Run tests:
+ ```bash
+ pytest
+ ```
+
+ Rebuild database (WARNING: deletes all data):
+ ```bash
+ python -c "from osm_changeset_loader.db import rebuild_database; rebuild_database()"
+ ```

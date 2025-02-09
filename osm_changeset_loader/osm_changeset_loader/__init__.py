@@ -19,3 +19,11 @@ __all__ = [
     "Metadata",
     "Path"
 ]
+
+# Make the package available for direct imports
+import sys
+import os
+
+package_dir = os.path.dirname(os.path.abspath(__file__))
+if package_dir not in sys.path:
+    sys.path.append(package_dir)
