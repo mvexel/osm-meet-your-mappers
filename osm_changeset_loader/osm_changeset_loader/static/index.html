@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OSM Mapper Activity</title>
+    <title>Meet Your Mappers</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <style>
         body {
@@ -13,115 +14,58 @@
             margin: 0 auto;
             padding: 20px;
         }
+
         #map {
             height: 400px;
             margin-bottom: 20px;
             border: 1px solid #ccc;
         }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        th, td {
-            padding: 8px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-        th {
-            background-color: #f5f5f5;
-            cursor: pointer;
-        }
-        th:hover {
-            background-color: #e5e5e5;
-        }
-        .changeset-links {
-            max-height: 100px;
-            overflow-y: auto;
-        }
-        .envelope-icon {
-            margin-left: 5px;
-            cursor: pointer;
-            color: #666;
-        }
+
         .loading {
-            text-align: center;
-            padding: 20px;
             display: none;
         }
     </style>
 </head>
+
 <body>
     <h1>OSM Mapper Activity Viewer</h1>
-    <div id="map"></div>
+    <div><input id="osmUrlInput" type="text" placeholder="https://www.openstreetmap.org/#map=16/40.73950/-111.86464"
+            aria-label="Paste an OSM map URL" />
+        <input type="button" aria-label="meet my mappers!" onclick="fetchMappers()">
+    </div>
     <div class="loading">Loading data...</div>
     <div id="results">
-        <table id="mappersTable">
-            <thead>
-                <tr>
-                    <th data-sort="username">Username</th>
-                    <th data-sort="lastEdit">Last Edit</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        let map;
-        let drawnBbox = null;
-        let startPoint = null;
-        let currentRect = null;
 
-        // Initialize the map
-        function initMap() {
-            map = L.map('map').setView([0, 0], 2);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
+        function osmUrlToBbox(osmUrl) {
+            const match = osmUrl.match("/#map=(\d+)/(\-?\d +\.\d +) / (\-?\d +\.\d +) /");
+            if (!match) return null;
 
-            // Add drawing functionality
-            map.on('mousedown', startDrawing);
-            map.on('mousemove', updateDrawing);
-            map.on('mouseup', endDrawing);
-        }
+            const zoom = parseInt(match[1], 10);
+            const lat = parseFloat(match[2]);
+            const lon = parseFloat(match[3]);
 
-        function startDrawing(e) {
-            startPoint = e.latlng;
-            map.dragging.disable();
-        }
+            // Tile size at zoom 0 is 360 degrees; it halves every zoom level
+            const degreesPerTile = 360 / Math.pow(2, zoom);
 
-        function updateDrawing(e) {
-            if (startPoint) {
-                if (currentRect) {
-                    map.removeLayer(currentRect);
-                }
-                const bounds = L.latLngBounds(startPoint, e.latlng);
-                currentRect = L.rectangle(bounds, {color: '#0000FF', weight: 1}).addTo(map);
-            }
-        }
-
-        function endDrawing(e) {
-            if (startPoint) {
-                const bounds = L.latLngBounds(startPoint, e.latlng);
-                if (drawnBbox) {
-                    map.removeLayer(drawnBbox);
-                }
-                drawnBbox = L.rectangle(bounds, {color: '#0000FF', weight: 2}).addTo(map);
-                fetchMappers(bounds);
-                map.dragging.enable();
-                startPoint = null;
-                if (currentRect) {
-                    map.removeLayer(currentRect);
-                }
-            }
+            // Approximate bounding box using half of the tile size
+            const halfSize = degreesPerTile / 2;
+            return {
+                minLat: lat - halfSize,
+                maxLat: lat + halfSize,
+                minLon: lon - halfSize,
+                maxLon: lon + halfSize
+            };
         }
 
         async function fetchMappers(bounds) {
+            const osmUrl = document.getElementById("osmUrlInput").textContent;
+            console.log(osmUrl);
             const loading = document.querySelector('.loading');
             loading.style.display = 'block';
-            
+
             try {
                 const response = await fetch(`/mappers/?min_lon=${bounds.getWest()}&max_lon=${bounds.getEast()}&min_lat=${bounds.getSouth()}&max_lat=${bounds.getNorth()}`);
                 const data = await response.json();
@@ -134,68 +78,7 @@
             }
         }
 
-        function displayMappers(mappers) {
-            const tbody = document.querySelector('#mappersTable tbody');
-            tbody.innerHTML = '';
-
-            mappers.forEach(mapper => {
-                const row = document.createElement('tr');
-                
-                // Username cell with links
-                const usernameCell = document.createElement('td');
-                const userLink = document.createElement('a');
-                userLink.href = `https://www.openstreetmap.org/user/${mapper.username}`;
-                userLink.textContent = mapper.username;
-                userLink.target = '_blank';
-                usernameCell.appendChild(userLink);
-
-                // Add message icon
-                const messageLink = document.createElement('a');
-                messageLink.href = `https://www.openstreetmap.org/messages/new/${mapper.username}`;
-                messageLink.target = '_blank';
-                messageLink.innerHTML = '✉️';
-                messageLink.className = 'envelope-icon';
-                messageLink.title = 'Send message';
-                usernameCell.appendChild(messageLink);
-
-                // Last edit cell
-                const lastEditCell = document.createElement('td');
-                lastEditCell.textContent = new Date(mapper.last_edit).toLocaleString();
-
-                row.appendChild(usernameCell);
-                row.appendChild(lastEditCell);
-                tbody.appendChild(row);
-            });
-        }
-
-        // Table sorting functionality
-        document.querySelectorAll('#mappersTable th').forEach(header => {
-            header.addEventListener('click', () => {
-                const sortBy = header.dataset.sort;
-                const tbody = document.querySelector('#mappersTable tbody');
-                const rows = Array.from(tbody.querySelectorAll('tr'));
-
-                rows.sort((a, b) => {
-                    let aVal, bVal;
-                    switch(sortBy) {
-                        case 'username':
-                            aVal = a.cells[0].querySelector('a').textContent;
-                            bVal = b.cells[0].querySelector('a').textContent;
-                            return aVal.localeCompare(bVal);
-                        case 'lastEdit':
-                            aVal = new Date(a.cells[2].textContent);
-                            bVal = new Date(b.cells[2].textContent);
-                            return bVal - aVal;
-                    }
-                });
-
-                tbody.innerHTML = '';
-                rows.forEach(row => tbody.appendChild(row));
-            });
-        });
-
-        // Initialize the map when the page loads
-        window.onload = initMap;
     </script>
 </body>
+
 </html>
