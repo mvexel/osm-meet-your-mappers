@@ -41,7 +41,8 @@ def insert_changesets_bulk(changesets) -> bool:
     """Bulk insert or update changesets to optimize database performance."""
     try:
         with session_scope() as session:
-            session.bulk_insert_mappings(Changeset, [cs.to_dict() for cs in changesets])
+            for cs in changesets:
+                session.merge(cs)
         return True
     except Exception as e:
         logging.error(f"Error inserting changesets: {e}")
