@@ -21,9 +21,10 @@ async function handleFormSubmit(event) {
   const areaType = formData.get("area_size");
 
   if (!validateOsmUrl(osmUrl)) {
-    log.textContent = "Error: Invalid OSM URL format";
+    osmUrlInput.ariaInvalid = true;
     return;
   }
+  osmUrlInput.ariaInvalid = false;
 
   try {
     await fetchMappers(osmUrl, areaType);
