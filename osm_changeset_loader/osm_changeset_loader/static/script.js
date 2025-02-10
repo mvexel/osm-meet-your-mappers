@@ -1,12 +1,12 @@
 // DOM Elements
 const form = document.querySelector("form");
 const log = document.querySelector("#log");
-const osmUrlInput = document.getElementById("osmUrlInput");
-const areaSelect = document.getElementById("areaSelect");
-const statusEl = document.getElementById("status");
-const fetchButton = document.getElementById("fetchButton");
-const progressBar = document.getElementById("progressBar");
-const resultsDiv = document.getElementById("results");
+const osmUrlInput = document.querySelector(".osm-url-input");
+const areaSelect = document.querySelector(".area-select");
+const statusEl = document.querySelector(".status-message");
+const submitButton = document.querySelector(".submit-button");
+const progressBar = document.querySelector(".progress-indicator");
+const resultsDiv = document.querySelector("#results");
 
 let currentBbox = null;
 
@@ -134,7 +134,7 @@ function displayMappers(data) {
 }
 
 async function fetchMappers(osmUrl, areaType) {
-  fetchButton.disabled = true;
+  submitButton.disabled = true;
   progressBar.style.display = "block";
   statusEl.innerHTML = '<span class="loader"></span> Loading data...';
 

@@ -23,19 +23,25 @@
                     <form>
                         <fieldset>
                             <label>OpenStreetMap URL</label>
-                            <input name="osm_url"
+                            <input name="osm_url" class="osm-url-input"
                                 placeholder="https://www.openstreetmap.org/#map=19/40.739058/-111.863875">
                             <label>
                                 Select the scale you are interested in:
                             </label>
-                            <input type="radio" name="area_size" value="neighborhood" checked>
-                            <label>Neighborhood</label>
-                            <input type="radio" name="area_size" value="city">
-                            <label>City</label>
-                            <input type="radio" name="area_size" value="state">
-                            <label>State / Province</label>
+                            <fieldset class="area-select">
+                                <input type="radio" name="area_size" value="neighborhood" checked>
+                                <label>Neighborhood</label>
+                                <input type="radio" name="area_size" value="city">
+                                <label>City</label>
+                                <input type="radio" name="area_size" value="state">
+                                <label>State / Province</label>
+                            </fieldset>
                         </fieldset>
-                        <input type="submit" value="Meet My Mappers" />
+                        <button type="submit" class="submit-button">Meet My Mappers</button>
+                        <div class="status-message" role="status"></div>
+                        <div class="progress-indicator" role="progressbar" aria-hidden="true">
+                            <progress></progress>
+                        </div>
                     </form>
                 </article>
             </div>
