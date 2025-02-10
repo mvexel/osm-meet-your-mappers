@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 
 from osm_changeset_loader.config import Config
-from osm_changeset_loader.db import get_db_session
+from osm_changeset_loader.db import get_db_session, get_last_processed_sequence
 from osm_changeset_loader.model import Changeset
 from osm_changeset_loader.path import Path
 from osm_changeset_loader.replication import ReplicationClient
