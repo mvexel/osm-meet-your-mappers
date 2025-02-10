@@ -5,220 +5,62 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <link rel="stylesheet" href="/static/pico.min.css">
+    <link rel="stylesheet" href="/static/pico.green.min.css" />
+    <link rel="stylesheet" href="/static/style.css">
     <title>Meet Your Mappers</title>
-    <style>
-        .action-row {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-    </style>
 </head>
 
 <body>
     <main class="container">
-        <h1>OSM Mapper Activity Viewer</h1>
-        <div>
-            <input id="osmUrlInput" type="text" placeholder="Paste osm.org URL here" aria-label="Paste an OSM map URL"
-                style="width: 400px;" />
-
-            <!-- Dropdown for selecting area type -->
-            <select id="areaSelect">
-                <option value="neighborhood">Neighborhood (5 km²)</option>
-                <option value="city">City (25 km²)</option>
-                <option value="state">State / Province (250 km²)</option>
-            </select>
-
-            <!-- Button and status message in a flex container -->
-            <div class="action-row">
-                <button id="fetchButton" onclick="fetchMappers()">Meet My Mappers!</button>
-                <button id="copyButton" onclick="copyAsGeoJSON()">Copy as GeoJSON</button>
-                <span id="status" role="status"></span>
+        <hgroup>
+            <h1>Meet Your Mappers!
+            </h1>
+            <p>Find out who has been mapping in your (or any) area!</p>
+        </hgroup>
+        <div class="grid">
+            <div>
+                <article>
+                    <form>
+                        <fieldset>
+                            <label>OpenStreetMap URL</label>
+                            <input name="osm_url"
+                                placeholder="https://www.openstreetmap.org/#map=19/40.739058/-111.863875">
+                            <label>
+                                Select the scale you are interested in:
+                            </label>
+                            <input type="radio" name="area_size" value="neighborhood" checked>
+                            <label>Neighborhood</label>
+                            <input type="radio" name="area_size" value="city">
+                            <label>City</label>
+                            <input type="radio" name="area_size" value="state">
+                            <label>State / Province</label>
+                        </fieldset>
+                        <input type="submit" value="Meet My Mappers" />
+                    </form>
+                </article>
+            </div>
+            <div>
+                <article>
+                    <h4>Instructions</h4>
+                    <ul>
+                        <li>Go to OSM and move the map so it is centered on the area you are interested in</li>
+                        <li>Copy the URL (<code>https://www.openstreetmap.org/#map=...</code>)</li>
+                        <li>Paste the URL in the form on this page</li>
+                        <li>Select the scale you are interested in: <span>Neighborhood</span>
+                            (approximately 5 km<sup>2</sup>),
+                            City
+                            (25km<sup>2</sup>) or State / Province (250 km<sup>2</sup>)</li>
+                    </ul>
+                </article>
             </div>
         </div>
-
-        <!-- The results will be rendered here -->
+        <pre id="log"></pre>
         <div id="results"></div>
     </main>
-
     <script src="/static/tablesort.min.js"></script>
     <script src="/static/tablesort.date.min.js"></script>
     <script src="/static/tablesort.number.min.js"></script>
-    <script>
-        // Global variable to hold the currently computed bounding box.
-        // This is used for copying GeoJSON.
-        let currentBbox = null;
-
-        // Parse the center coordinates from an OSM URL.
-        function osmUrlToCenter(osmUrl) {
-            const match = osmUrl.match(/#map=(\d+)\/(-?\d+\.\d+)\/(-?\d+\.\d+)/);
-            if (!match) return null;
-            const lat = parseFloat(match[2]);
-            const lon = parseFloat(match[3]);
-            return { lat, lon };
-        }
-
-        // Compute a bounding box given the center and selected area type.
-        function computeBbox(center, areaType) {
-            let halfSideKm;
-            if (areaType === "neighborhood") {
-                halfSideKm = Math.sqrt(5) / 2;
-            } else if (areaType === "city") {
-                halfSideKm = Math.sqrt(25) / 2;
-            } else if (areaType === "state") {
-                halfSideKm = Math.sqrt(250) / 2;
-            } else {
-                halfSideKm = 0.5;
-            }
-            const latOffset = halfSideKm / 111;
-            const lonOffset = halfSideKm / (111 * Math.cos(center.lat * Math.PI / 180));
-            return {
-                minLat: center.lat - latOffset,
-                maxLat: center.lat + latOffset,
-                minLon: center.lon - lonOffset,
-                maxLon: center.lon + lonOffset
-            };
-        }
-
-        // Render a sortable table using Tablesort.
-        function displayMappers(data) {
-            data.sort((a, b) => new Date(b.last_change) - new Date(a.last_change));
-
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = '';
-
-            const table = document.createElement('table');
-
-            // Define the columns with explicit types.
-            const columns = [
-                { key: 'user', label: 'User', type: 'string' },
-                { key: 'changeset_count', label: 'Changeset Count', type: 'number' },
-                { key: 'first_change', label: 'First Change', type: 'date' },
-                { key: 'last_change', label: 'Last Change', type: 'date' }
-            ];
-
-            // Build the table header.
-            const thead = document.createElement('thead');
-            const headerRow = document.createElement('tr');
-            columns.forEach(col => {
-                const th = document.createElement('th');
-                th.textContent = col.label;
-                if (col.key === 'changeset_count') {
-                    th.setAttribute("data-sort-method", "number");
-                    th.setAttribute("data-sort-default", "");
-                }
-                headerRow.appendChild(th);
-            });
-            thead.appendChild(headerRow);
-            table.appendChild(thead);
-
-            // Build the table body.
-            const tbody = document.createElement('tbody');
-            data.forEach(item => {
-                const tr = document.createElement('tr');
-                columns.forEach(col => {
-                    const td = document.createElement('td');
-                    let value = item[col.key];
-                    if (col.type === 'date') {
-                        const dateObj = new Date(value);
-                        td.textContent = dateObj.toLocaleString();
-                        td.setAttribute("data-sort", dateObj.getTime());
-                        //                    } else if (col.type === 'number') {
-                        //                        td.textContent = value;
-                        //                        td.setAttribute("data-sort", value);
-                    } else {
-                        td.textContent = value;
-                    }
-                    tr.appendChild(td);
-                });
-                tbody.appendChild(tr);
-            });
-            table.appendChild(tbody);
-            resultsDiv.appendChild(table);
-
-            // Initialize Tablesort on the table.
-            new Tablesort(table, { descending: true });
-        }
-
-        // Function to copy the current bounding box as GeoJSON.
-        function copyAsGeoJSON() {
-            if (!currentBbox) {
-                alert("Please compute the bounding box first by clicking 'Meet My Mappers!'");
-                return;
-            }
-            // Build the GeoJSON polygon.
-            // GeoJSON coordinates use [longitude, latitude] ordering.
-            const geojson = {
-                "type": "FeatureCollection",
-                "features": [
-                    {
-                        "type": "Feature",
-                        "properties": {},
-                        "geometry": {
-                            "type": "Polygon",
-                            "coordinates": [[
-                                [currentBbox.minLon, currentBbox.maxLat],
-                                [currentBbox.minLon, currentBbox.minLat],
-                                [currentBbox.maxLon, currentBbox.minLat],
-                                [currentBbox.maxLon, currentBbox.maxLat],
-                                [currentBbox.minLon, currentBbox.maxLat]
-                            ]]
-                        }
-                    }
-                ]
-            };
-            const geojsonStr = JSON.stringify(geojson, null, 2);
-            navigator.clipboard.writeText(geojsonStr)
-                .then(() => {
-                    alert("GeoJSON copied to clipboard!");
-                })
-                .catch(err => {
-                    alert("Failed to copy GeoJSON: " + err);
-                });
-        }
-
-        async function fetchMappers() {
-            const osmUrl = document.getElementById("osmUrlInput").value;
-            const areaSelect = document.getElementById("areaSelect");
-            const selectedArea = areaSelect.value;
-            const statusEl = document.getElementById("status");
-            const fetchButton = document.getElementById("fetchButton");
-
-            fetchButton.disabled = true;
-            statusEl.innerHTML = '<span class="loader"></span> Loading data...';
-
-            const center = osmUrlToCenter(osmUrl);
-            if (!center) {
-                statusEl.textContent = 'Error: Invalid OSM URL format';
-                fetchButton.disabled = false;
-                return;
-            }
-
-            // Compute the bounding box and store it globally.
-            currentBbox = computeBbox(center, selectedArea);
-
-            try {
-                const response = await fetch(
-                    `/mappers/?min_lon=${currentBbox.minLon}&max_lon=${currentBbox.maxLon}&min_lat=${currentBbox.minLat}&max_lat=${currentBbox.maxLat}`
-                );
-                const data = await response.json();
-                statusEl.textContent = `Success! Found ${data.length} mappers`;
-                displayMappers(data);
-            } catch (error) {
-                console.error('Error fetching mapper data:', error);
-                statusEl.textContent = 'Error fetching mapper data. Please try again.';
-            } finally {
-                fetchButton.disabled = false;
-            }
-        }
-    </script>
+    <script src="/static/script.js"></script>
 </body>
 
 </html>

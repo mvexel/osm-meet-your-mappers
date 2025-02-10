@@ -1,0 +1,24 @@
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#progressBar {
+  display: none;
+}
+
+th:hover {
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+#map {
+  min-height: 400px;
+}
