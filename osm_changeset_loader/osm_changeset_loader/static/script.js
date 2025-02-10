@@ -15,16 +15,16 @@ form.addEventListener("submit", handleFormSubmit);
 
 async function handleFormSubmit(event) {
   event.preventDefault();
-  
+
   const formData = new FormData(form);
   const osmUrl = formData.get("osm_url");
   const areaType = formData.get("area_size");
-  
+
   if (!validateOsmUrl(osmUrl)) {
     log.textContent = "Error: Invalid OSM URL format";
     return;
   }
-  
+
   try {
     await fetchMappers(osmUrl, areaType);
   } catch (error) {
@@ -45,7 +45,7 @@ function osmUrlToCenter(osmUrl) {
   }
   return {
     lat: parseFloat(match[2]),
-    lon: parseFloat(match[3])
+    lon: parseFloat(match[3]),
   };
 }
 
@@ -152,6 +152,6 @@ async function fetchMappers(osmUrl, areaType) {
     console.error("Error fetching mapper data:", error);
     statusEl.textContent = "Error fetching mapper data. Please try again.";
   } finally {
-    fetchButton.disabled = false;
+    submitButton.disabled = false;
   }
 }
