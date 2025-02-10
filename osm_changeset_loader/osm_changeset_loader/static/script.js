@@ -136,6 +136,7 @@ function displayMappers(data) {
 async function fetchMappers(osmUrl, areaType) {
   submitButton.disabled = true;
   progressBar.style.display = "block";
+  progressBar.setAttribute("aria-hidden", "false");
   statusEl.innerHTML = '<span class="loader"></span> Loading data...';
 
   try {
@@ -153,5 +154,7 @@ async function fetchMappers(osmUrl, areaType) {
     statusEl.textContent = "Error fetching mapper data. Please try again.";
   } finally {
     submitButton.disabled = false;
+    progressBar.style.display = "none";
+    progressBar.setAttribute("aria-hidden", "true");
   }
 }
