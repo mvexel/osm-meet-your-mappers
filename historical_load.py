@@ -83,15 +83,22 @@ def worker(stop_event: threading.Event, task_queue: queue.Queue):
         task_queue.task_done()
 
 
-def load_historical(start_sequence: int, end_sequence: int):
+def load_historical(start_sequence: int, end_sequence: int, continuous: bool = False):
     """
-    Load historical changesets from start_sequence to end_sequence.
+    Load historical changesets from start_sequence to end_sequence with continuous updates.
 
     Args:
         start_sequence: Starting sequence number
         end_sequence: Ending sequence number
+        continuous: Whether to keep running and check for new sequences
     """
     stop_event = threading.Event()
+    last_processed = start_sequence
+
+    # If no sequence range specified, use last processed from metadata
+    if start_sequence == 0 and end_sequence == 0:
+        start_sequence = get_last_processed_sequence() + 1
+        end_sequence = replication_client.get_remote_state().sequence
 
     # Signal handlers for graceful exit
     signal.signal(signal.SIGTERM, lambda s, f: stop_event.set())
@@ -119,14 +126,32 @@ def load_historical(start_sequence: int, end_sequence: int):
             stop_event.set()
 
     logging.info("Historical load complete.")
+    
+    if continuous:
+        logging.info("Entering continuous update mode...")
+        while not stop_event.is_set():
+            try:
+                current_remote = replication_client.get_remote_state().sequence
+                if current_remote > end_sequence:
+                    logging.info(f"New sequences available: {end_sequence+1}-{current_remote}")
+                    load_historical(end_sequence + 1, current_remote)
+                    end_sequence = current_remote
+                time.sleep(60)  # Check every minute
+            except Exception as e:
+                logging.error(f"Error in continuous mode: {e}")
+                time.sleep(30)
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Load historical OSM changesets")
-    parser.add_argument("start", type=int, help="Starting sequence number")
-    parser.add_argument("end", type=int, help="Ending sequence number")
+    parser.add_argument("--continuous", action="store_true", 
+                      help="Run in continuous mode checking for new changesets")
+    parser.add_argument("start", type=int, nargs='?', default=0,
+                      help="Starting sequence number (default: last processed)")
+    parser.add_argument("end", type=int, nargs='?', default=0,
+                      help="Ending sequence number (default: current remote state)")
 
     args = parser.parse_args()
-    load_historical(args.start, args.end)
+    load_historical(args.start, args.end, args.continuous)

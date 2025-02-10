@@ -79,6 +79,18 @@ def query_changesets(
     return query.offset(offset).limit(limit).all()
 
 
+def get_last_processed_sequence(db_url=DB_URL) -> int:
+    """Get the last processed replication sequence number from metadata."""
+    session = get_db_session(db_url)
+    seq = session.query(Metadata.value).filter(Metadata.key == 'last_sequence').scalar()
+    return int(seq) if seq else 0
+
+def set_last_processed_sequence(sequence: int, db_url=DB_URL):
+    """Update the last processed replication sequence number in metadata."""
+    session = get_db_session(db_url)
+    session.merge(Metadata(key='last_sequence', value=str(sequence)))
+    session.commit()
+
 def get_oldest_changeset_timestamp(db_url=DB_URL):
     """
     Get the timestamp of the oldest changeset in the database.
