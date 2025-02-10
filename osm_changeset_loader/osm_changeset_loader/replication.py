@@ -17,16 +17,25 @@ from .config import Config
 class ReplicationClient:
     config: Config
 
-    def get_remote_state(self) -> Optional[Path]:
-        """Get the latest replication state from the OSM API."""
+    def get_remote_state(self, for_timestamp: datetime = None) -> Optional[Path]:
+        """Get replication state from the OSM API, optionally for a specific timestamp."""
         try:
             response = requests.get(f"{self.config.REPLICATION_URL}/state.yaml")
             response.raise_for_status()
             state = response.text.split("\n")[2]
             _, sequence = state.split(": ")
             sequence = sequence.strip()
-            logging.debug(f"remote state is {sequence}")
-            return Path(sequence=int(sequence))
+            sequence = int(sequence.strip())
+            
+            if for_timestamp:
+                # Estimate sequence number based on timestamp (sequences are 1 per minute)
+                state_time = datetime.strptime(response.text.split("\n")[1].split(": ")[1], "%Y-%m-%dT%H:%M:%SZ")
+                if for_timestamp > state_time:
+                    return Path(sequence=sequence)  # If desired time is after state, use latest
+                time_diff = state_time - for_timestamp
+                return Path(sequence=max(1, sequence - int(time_diff.total_seconds() // 60)))
+            
+            return Path(sequence=sequence)
         except requests.RequestException as e:
             logging.error(f"Error fetching remote state: {e}")
             return None

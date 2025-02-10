@@ -83,6 +83,16 @@ def get_last_processed_sequence(db_url=DB_URL) -> int:
     """Get the last processed replication sequence number from metadata."""
     session = get_db_session(db_url)
     seq = session.query(Metadata.value).filter(Metadata.key == 'last_sequence').scalar()
+    
+    if not seq:  # If no sequence exists, find newest changeset and get its sequence
+        newest = session.query(Changeset.closed_at).order_by(Changeset.closed_at.desc()).first()
+        if newest and newest[0]:
+            from osm_changeset_loader.replication import ReplicationClient
+            from osm_changeset_loader.config import Config
+            client = ReplicationClient(Config())
+            state = client.get_remote_state(newest[0])
+            if state:
+                return state.sequence
     return int(seq) if seq else 0
 
 def set_last_processed_sequence(sequence: int, db_url=DB_URL):
