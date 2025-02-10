@@ -7,8 +7,39 @@ const statusEl = document.querySelector(".status-message");
 const submitButton = document.querySelector(".submit-button");
 const progressBar = document.querySelector(".progress-indicator");
 const resultsDiv = document.querySelector("#results");
+const exportContainer = document.querySelector("#export-container");
+const exportButton = document.querySelector(".export-csv-button");
 
 let currentBbox = null;
+let currentData = null;  // Store the current data for export
+
+// Add export button click handler
+exportButton.addEventListener("click", exportToCsv);
+
+function exportToCsv() {
+    if (!currentData) return;
+    
+    const headers = ["user", "changeset_count", "first_change", "last_change"];
+    const csvContent = [
+        headers.join(","),
+        ...currentData.map(row => [
+            `"${row.user}"`,
+            row.changeset_count,
+            new Date(row.first_change).toISOString(),
+            new Date(row.last_change).toISOString()
+        ].join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "osm_mappers_export.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
 
 // Event Listeners
 form.addEventListener("submit", handleFormSubmit);
@@ -76,10 +107,11 @@ function computeBbox(center, areaType) {
 
 // Render a sortable table using Tablesort.
 function displayMappers(data) {
+  currentData = data;  // Store the data for export
   data.sort((a, b) => new Date(b.last_change) - new Date(a.last_change));
 
-  const resultsDiv = document.getElementById("results");
   resultsDiv.innerHTML = "";
+  exportContainer.style.display = data.length > 0 ? "block" : "none";
 
   const table = document.createElement("table");
 
