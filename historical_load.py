@@ -21,9 +21,9 @@ THREADS = 8
 CHUNK_SIZE = 1000  # Number of sequences per chunk
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
 
 @contextmanager
 def session_scope():
@@ -37,6 +37,7 @@ def session_scope():
     finally:
         session.close()
 
+
 def insert_changesets_bulk(changesets) -> bool:
     """Bulk insert or update changesets to optimize database performance."""
     try:
@@ -47,6 +48,7 @@ def insert_changesets_bulk(changesets) -> bool:
     except Exception as e:
         logging.error(f"Error inserting changesets: {e}")
         return False
+
 
 def process_sequence(sequence: int) -> bool:
     """Process a single replication sequence."""
@@ -59,6 +61,7 @@ def process_sequence(sequence: int) -> bool:
     except Exception as e:
         logging.error(f"Error processing sequence {sequence}: {e}")
     return False
+
 
 def worker(stop_event: threading.Event, task_queue: queue.Queue):
     """Process changesets using a task queue."""
@@ -79,16 +82,17 @@ def worker(stop_event: threading.Event, task_queue: queue.Queue):
 
         task_queue.task_done()
 
+
 def load_historical(start_sequence: int, end_sequence: int):
     """
     Load historical changesets from start_sequence to end_sequence.
-    
+
     Args:
         start_sequence: Starting sequence number
         end_sequence: Ending sequence number
     """
     stop_event = threading.Event()
-    
+
     # Signal handlers for graceful exit
     signal.signal(signal.SIGTERM, lambda s, f: stop_event.set())
     signal.signal(signal.SIGINT, lambda s, f: stop_event.set())
@@ -104,8 +108,7 @@ def load_historical(start_sequence: int, end_sequence: int):
     # Process chunks using thread pool
     with ThreadPoolExecutor(max_workers=THREADS) as executor:
         futures = [
-            executor.submit(worker, stop_event, task_queue)
-            for _ in range(THREADS)
+            executor.submit(worker, stop_event, task_queue) for _ in range(THREADS)
         ]
 
         try:
@@ -117,11 +120,13 @@ def load_historical(start_sequence: int, end_sequence: int):
 
     logging.info("Historical load complete.")
 
+
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description='Load historical OSM changesets')
-    parser.add_argument('start', type=int, help='Starting sequence number')
-    parser.add_argument('end', type=int, help='Ending sequence number')
-    
+
+    parser = argparse.ArgumentParser(description="Load historical OSM changesets")
+    parser.add_argument("start", type=int, help="Starting sequence number")
+    parser.add_argument("end", type=int, help="Ending sequence number")
+
     args = parser.parse_args()
     load_historical(args.start, args.end)
