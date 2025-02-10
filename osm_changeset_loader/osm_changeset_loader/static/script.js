@@ -10,35 +10,42 @@ const resultsDiv = document.querySelector("#results");
 const exportContainer = document.querySelector("#export-container");
 const exportButton = document.querySelector(".export-csv-button");
 
+// box sizes
+const neighborhoodSqKm = 5;
+const cityKm2 = 25;
+const regionKm2 = 250;
+
 let currentBbox = null;
-let currentData = null;  // Store the current data for export
+let currentData = null; // Store the current data for export
 
 // Add export button click handler
 exportButton.addEventListener("click", exportToCsv);
 
 function exportToCsv() {
-    if (!currentData) return;
-    
-    const headers = ["user", "changeset_count", "first_change", "last_change"];
-    const csvContent = [
-        headers.join(","),
-        ...currentData.map(row => [
-            `"${row.user}"`,
-            row.changeset_count,
-            new Date(row.first_change).toISOString(),
-            new Date(row.last_change).toISOString()
-        ].join(","))
-    ].join("\n");
+  if (!currentData) return;
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", "osm_mappers_export.csv");
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const headers = ["user", "changeset_count", "first_change", "last_change"];
+  const csvContent = [
+    headers.join(","),
+    ...currentData.map((row) =>
+      [
+        `"${row.user}"`,
+        row.changeset_count,
+        new Date(row.first_change).toISOString(),
+        new Date(row.last_change).toISOString(),
+      ].join(",")
+    ),
+  ].join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", "osm_mappers_export.csv");
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 // Event Listeners
@@ -87,14 +94,15 @@ function computeBbox(center, areaType) {
   }
   let halfSideKm;
   if (areaType === "neighborhood") {
-    halfSideKm = Math.sqrt(5) / 2;
+    halfSideKm = Math.sqrt(neighborhoodSqKm) / 2;
   } else if (areaType === "city") {
-    halfSideKm = Math.sqrt(25) / 2;
-  } else if (areaType === "state") {
-    halfSideKm = Math.sqrt(250) / 2;
+    halfSideKm = Math.sqrt(cityKm2) / 2;
+  } else if (areaType === "region") {
+    halfSideKm = Math.sqrt(regionKm2) / 2;
   } else {
     halfSideKm = 0.5;
   }
+  // approximate sqkm calculation
   const latOffset = halfSideKm / 111;
   const lonOffset = halfSideKm / (111 * Math.cos((center.lat * Math.PI) / 180));
   return {
@@ -107,7 +115,7 @@ function computeBbox(center, areaType) {
 
 // Render a sortable table using Tablesort.
 function displayMappers(data) {
-  currentData = data;  // Store the data for export
+  currentData = data; // Store the data for export
   data.sort((a, b) => new Date(b.last_change) - new Date(a.last_change));
 
   resultsDiv.innerHTML = "";
@@ -149,9 +157,6 @@ function displayMappers(data) {
         const dateObj = new Date(value);
         td.textContent = dateObj.toLocaleString();
         td.setAttribute("data-sort", dateObj.getTime());
-        //                    } else if (col.type === 'number') {
-        //                        td.textContent = value;
-        //                        td.setAttribute("data-sort", value);
       } else {
         td.textContent = value;
       }
