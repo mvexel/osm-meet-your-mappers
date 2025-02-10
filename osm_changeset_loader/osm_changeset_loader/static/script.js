@@ -142,7 +142,6 @@ async function fetchMappers(osmUrl, areaType) {
     const center = osmUrlToCenter(osmUrl);
     currentBbox = computeBbox(center, areaType);
 
-  try {
     const response = await fetch(
       `/mappers/?min_lon=${currentBbox.minLon}&max_lon=${currentBbox.maxLon}&min_lat=${currentBbox.minLat}&max_lat=${currentBbox.maxLat}`
     );
