@@ -1,41 +1,58 @@
+// DOM Elements
 const form = document.querySelector("form");
 const log = document.querySelector("#log");
+const osmUrlInput = document.getElementById("osmUrlInput");
+const areaSelect = document.getElementById("areaSelect");
+const statusEl = document.getElementById("status");
+const fetchButton = document.getElementById("fetchButton");
+const progressBar = document.getElementById("progressBar");
+const resultsDiv = document.getElementById("results");
 
-form.addEventListener(
-  "submit",
-  (event) => {
-    const data = new FormData(form);
-    if (!validateOsmUrl(data.osm_url)) {
-      log.innerText("uh oh");
-    }
+let currentBbox = null;
 
-    log.innerText = center;
-    // let output = "";
-    // for (const entry of data) {
-    //   output = `${output}${entry[0]}=${entry[1]}\r`;
-    // }
-    // log.innerText = output;
-    event.preventDefault();
-  },
-  false
-);
+// Event Listeners
+form.addEventListener("submit", handleFormSubmit);
 
-function validateOsmUrl(osmUrl) {
-  const match = osmUrl.match(/#map=(\d+)\/(-?\d+\.\d+)\/(-?\d+\.\d+)/);
-  return match ? true : false;
+async function handleFormSubmit(event) {
+  event.preventDefault();
+  
+  const formData = new FormData(form);
+  const osmUrl = formData.get("osm_url");
+  const areaType = formData.get("area_size");
+  
+  if (!validateOsmUrl(osmUrl)) {
+    log.textContent = "Error: Invalid OSM URL format";
+    return;
+  }
+  
+  try {
+    await fetchMappers(osmUrl, areaType);
+  } catch (error) {
+    log.textContent = `Error: ${error.message}`;
+    console.error("Form submission error:", error);
+  }
 }
 
-// Parse the center coordinates from an OSM URL.
+// Validation and parsing functions
+function validateOsmUrl(osmUrl) {
+  return osmUrl.match(/#map=(\d+)\/(-?\d+\.\d+)\/(-?\d+\.\d+)/) !== null;
+}
+
 function osmUrlToCenter(osmUrl) {
   const match = osmUrl.match(/#map=(\d+)\/(-?\d+\.\d+)\/(-?\d+\.\d+)/);
-  if (!match) return null;
-  const lat = parseFloat(match[2]);
-  const lon = parseFloat(match[3]);
-  return { lat, lon };
+  if (!match) {
+    throw new Error("Invalid OSM URL format");
+  }
+  return {
+    lat: parseFloat(match[2]),
+    lon: parseFloat(match[3])
+  };
 }
 
-// Compute a bounding box given the center and selected area type.
 function computeBbox(center, areaType) {
+  if (!center || !areaType) {
+    throw new Error("Invalid center or area type");
+  }
   let halfSideKm;
   if (areaType === "neighborhood") {
     halfSideKm = Math.sqrt(5) / 2;
@@ -116,27 +133,14 @@ function displayMappers(data) {
   new Tablesort(table, { descending: true });
 }
 
-async function fetchMappers() {
-  const osmUrl = document.getElementById("osmUrlInput").value;
-  const areaSelect = document.getElementById("areaSelect");
-  const selectedArea = areaSelect.value;
-  const statusEl = document.getElementById("status");
-  const fetchButton = document.getElementById("fetchButton");
-  const progressBar = document.getElementById("progressBar");
-
+async function fetchMappers(osmUrl, areaType) {
   fetchButton.disabled = true;
-  progressBar.display = "block";
+  progressBar.style.display = "block";
   statusEl.innerHTML = '<span class="loader"></span> Loading data...';
 
-  const center = osmUrlToCenter(osmUrl);
-  if (!center) {
-    statusEl.textContent = "Error: Invalid OSM URL format";
-    fetchButton.disabled = false;
-    return;
-  }
-
-  // Compute the bounding box and store it globally.
-  currentBbox = computeBbox(center, selectedArea);
+  try {
+    const center = osmUrlToCenter(osmUrl);
+    currentBbox = computeBbox(center, areaType);
 
   try {
     const response = await fetch(
