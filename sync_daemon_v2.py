@@ -19,7 +19,7 @@ replication_client = ReplicationClient(config)
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
@@ -29,6 +29,7 @@ class SyncDaemon:
         self.stop_event = threading.Event()
         self.backfill_thread = None
         self.forward_sync_thread = None
+        logger.debug("SyncDaemon initialized")
         
     def update_metadata(self, session: Session, sequence: int, success: bool = True) -> None:
         """Update metadata with the latest processed state"""
@@ -72,6 +73,7 @@ class SyncDaemon:
 
     def backfill_worker(self):
         """Work backwards from current state until reaching existing data"""
+        logger.debug("Backfill worker started")
         session = get_db_session()
         try:
             remote_state = replication_client.get_remote_state()
@@ -84,8 +86,10 @@ class SyncDaemon:
 
             for sequence in range(current_sequence, 0, -1):
                 if self.stop_event.is_set():
+                    logger.debug("Stop event set, breaking backfill loop")
                     break
 
+                logger.debug(f"Processing sequence {sequence}")
                 if not self.process_sequence(sequence, session):
                     logger.info(f"Reached already processed sequence {sequence}, stopping backfill")
                     break
@@ -96,13 +100,16 @@ class SyncDaemon:
             logger.error(f"Error in backfill worker: {e}")
         finally:
             session.close()
+            logger.debug("Backfill worker finished")
 
     def forward_sync_worker(self):
         """Check for new changes and process them"""
+        logger.debug("Forward sync worker started")
         session = get_db_session()
         try:
             while not self.stop_event.is_set():
                 try:
+                    logger.debug("Fetching remote state")
                     remote_state = replication_client.get_remote_state()
                     if not remote_state:
                         logger.warning("Could not fetch remote state")
@@ -111,16 +118,19 @@ class SyncDaemon:
 
                     remote_sequence = remote_state.sequence
                     last_processed = get_last_processed_sequence()
+                    logger.debug(f"Remote sequence: {remote_sequence}, Last processed: {last_processed}")
 
                     if remote_sequence > last_processed:
                         logger.info(f"New sequences available: {last_processed+1} to {remote_sequence}")
                         for sequence in range(last_processed + 1, remote_sequence + 1):
                             if self.stop_event.is_set():
+                                logger.debug("Stop event set, breaking forward sync loop")
                                 break
                             self.process_sequence(sequence, session)
                     else:
                         logger.debug(f"No new sequences available (current={remote_sequence}, last_processed={last_processed})")
 
+                    logger.debug("Sleeping for 60 seconds")
                     time.sleep(60)  # Check every minute
 
                 except Exception as e:
@@ -129,6 +139,7 @@ class SyncDaemon:
 
         finally:
             session.close()
+            logger.debug("Forward sync worker finished")
 
     def start(self):
         """Start the sync daemon threads"""
