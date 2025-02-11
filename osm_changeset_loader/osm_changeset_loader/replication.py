@@ -13,6 +13,8 @@ from .path import Path
 from .config import Config
 from .state import StateFile, find_sequence_for_timestamp
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class ReplicationClient:
