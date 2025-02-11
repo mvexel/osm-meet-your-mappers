@@ -74,6 +74,8 @@ class ReplicationClient:
         """Insert a new changeset into the database."""
         # Implement database insertion logic
         pass
+
+    def get_changesets(self, path: Path) -> Optional[List[Changeset]]:
         """Get changeset objects from replication path."""
         url = path.to_url()
         try:
