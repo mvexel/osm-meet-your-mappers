@@ -106,36 +106,41 @@ class SyncDaemon:
         """Check for new changes and process them"""
         logger.debug("Forward sync worker started")
         session = get_db_session()
+        last_check_time = 0
+        check_interval = 300  # Check every 5 minutes
         try:
             while not self.stop_event.is_set():
-                try:
-                    logger.debug("Fetching remote state")
-                    remote_state = replication_client.get_remote_state()
-                    if not remote_state:
-                        logger.warning("Could not fetch remote state")
-                        time.sleep(60)
-                        continue
+                current_time = time.time()
+                if current_time - last_check_time >= check_interval:
+                    try:
+                        logger.debug("Fetching remote state")
+                        remote_state = replication_client.get_remote_state()
+                        if not remote_state:
+                            logger.warning("Could not fetch remote state")
+                            time.sleep(60)
+                            continue
 
-                    remote_sequence = remote_state.sequence
-                    last_processed = get_last_processed_sequence()
-                    logger.debug(f"Remote sequence: {remote_sequence}, Last processed: {last_processed}")
+                        remote_sequence = remote_state.sequence
+                        last_processed = get_last_processed_sequence()
+                        logger.debug(f"Remote sequence: {remote_sequence}, Last processed: {last_processed}")
 
-                    if remote_sequence > last_processed:
-                        logger.info(f"New sequences available: {last_processed+1} to {remote_sequence}")
-                        for sequence in range(last_processed + 1, remote_sequence + 1):
-                            if self.stop_event.is_set():
-                                logger.debug("Stop event set, breaking forward sync loop")
-                                break
-                            self.process_sequence(sequence, session)
-                    else:
-                        logger.debug(f"No new sequences available (current={remote_sequence}, last_processed={last_processed})")
+                        if remote_sequence > last_processed:
+                            logger.info(f"New sequences available: {last_processed+1} to {remote_sequence}")
+                            for sequence in range(last_processed + 1, remote_sequence + 1):
+                                if self.stop_event.is_set():
+                                    logger.debug("Stop event set, breaking forward sync loop")
+                                    break
+                                self.process_sequence(sequence, session)
+                        else:
+                            logger.debug(f"No new sequences available (current={remote_sequence}, last_processed={last_processed})")
 
-                    logger.debug("Sleeping for 60 seconds")
-                    time.sleep(60)  # Check every minute
+                        last_check_time = current_time
 
-                except Exception as e:
-                    logger.error(f"Error in forward sync: {e}")
-                    time.sleep(30)
+                    except Exception as e:
+                        logger.error(f"Error in forward sync: {e}")
+                        time.sleep(30)
+
+                time.sleep(1)  # Short sleep to prevent busy waiting
 
         finally:
             session.close()
