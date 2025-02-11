@@ -22,9 +22,11 @@ sudo -u postgres psql -c "CREATE USER osm WITH PASSWORD 'your_password';"
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE osm_changesets TO osm;"
 ```
 
-2. Set the database URL in your environment:
-```bash
-export DATABASE_URL="postgresql://osm:your_password@localhost/osm_changesets"
+2. Edit config.py to set your SQLAlchemy database URL and any other configuration you want to customize:
+```python
+class Config:
+    DB_URL: str = "postgresql://mvexel@localhost:5432/changesets"
+    BBOX: Tuple[float, float, float, float] = (-180, -90, 180, 90)
 ```
 
 3. Create the database tables:
