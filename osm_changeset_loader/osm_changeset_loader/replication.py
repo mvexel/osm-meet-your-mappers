@@ -26,15 +26,22 @@ class ReplicationClient:
             _, sequence = state.split(": ")
             sequence = sequence.strip()
             sequence = int(sequence.strip())
-            
+
             if for_timestamp:
                 # Estimate sequence number based on timestamp (sequences are 1 per minute)
-                state_time = datetime.strptime(response.text.split("\n")[1].split(": ")[1], "%Y-%m-%dT%H:%M:%SZ")
+                state_time = datetime.strptime(
+                    response.text.split("\n")[1].split(": ")[1].split(".")[0],
+                    "%Y-%m-%d %H:%M:%S",
+                )
                 if for_timestamp > state_time:
-                    return Path(sequence=sequence)  # If desired time is after state, use latest
+                    return Path(
+                        sequence=sequence
+                    )  # If desired time is after state, use latest
                 time_diff = state_time - for_timestamp
-                return Path(sequence=max(1, sequence - int(time_diff.total_seconds() // 60)))
-            
+                return Path(
+                    sequence=max(1, sequence - int(time_diff.total_seconds() // 60))
+                )
+
             return Path(sequence=sequence)
         except requests.RequestException as e:
             logging.error(f"Error fetching remote state: {e}")
