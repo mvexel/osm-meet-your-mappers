@@ -20,38 +20,21 @@ logger = logging.getLogger(__name__)
 class ReplicationClient:
     config: Config
 
-    def get_remote_state(self, for_timestamp: datetime = None) -> Optional[Path]:
-        """Get replication state from the OSM API, optionally for a specific timestamp."""
+    def get_remote_state(self) -> Optional[Path]:
+        """Get replication state from the OSM API
+        by querying state.yaml"""
         try:
-            if for_timestamp:
-                # Find the sequence number for this timestamp
-                sequence = find_sequence_for_timestamp(for_timestamp)
-                if sequence:
-                    return Path(sequence=sequence)
-                return None
-            
-            # Get current sequence by checking recent state files
-            # Start with the most recent possible sequence and work backwards
-            current = StateFile(9_999_999)  # Arbitrary high number
-            step = 10_000  # Start with a large step
-            
-            while step > 0:
-                logger.debug(f"Checking sequence {current.sequence}")
-                if current.fetch():
-                    logger.info(f"Found current sequence: {current.sequence} with timestamp {current.timestamp}")
-                    return Path(sequence=current.sequence)
-                
-                current = StateFile(current.sequence - step)
-                
-                if current.sequence < 2_007_990:  # This is when state files started
-                    logger.warning("Reached earliest available state file (2007990), stopping search")
-                    return None
-                
-                if step > 1:
-                    step = step // 2  # Reduce step size for finer search
-                    
-        except Exception as e:
-            logging.error(f"Error fetching remote state: {e}")
+            state_url = f"{Config.REPLICATION_URL}/state.yaml"
+            response = requests.get(state_url)
+            response.raise_for_status()
+
+            lines = response.text.strip().split("\n")[1:]
+            last_run = datetime.fromisoformat(lines[0].split(": ")[1])
+            sequence = int(lines[1].split(": ")[1])
+            return {"last_run": last_run, "sequence": sequence}
+
+        except requests.RequestException as e:
+            logging.error(f"Error processing state.yaml: {e}")
             return None
 
     def get_changesets(self, path: Path) -> Optional[List[Changeset]]:

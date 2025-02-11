@@ -17,7 +17,7 @@ __all__ = [
     "create_tables",
     "Changeset",
     "Metadata",
-    "Path"
+    "Path",
 ]
 
 # Make the package available for direct imports
