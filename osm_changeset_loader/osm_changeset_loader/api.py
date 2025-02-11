@@ -225,7 +225,6 @@ async def get_metadata():
     Retrieve the replication metadata state from the database.
     This shows the lowest replication sequence number processed and its timestamp.
     """
-    # Assume that SessionLocal is defined in your .db module.
     from .db import get_db_session
 
     db = get_db_session()
