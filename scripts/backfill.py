@@ -28,8 +28,18 @@ def model_to_dict(instance) -> dict:
     """
     Convert a SQLAlchemy model instance to a dictionary for bulk insertion.
     Only includes the columns defined in the model's table.
+    For geometry columns (like bbox) the value is converted to EWKT.
     """
-    return {col.name: getattr(instance, col.name) for col in instance.__table__.columns}
+    from geoalchemy2.shape import to_shape
+
+    d = {}
+    for col in instance.__table__.columns:
+        value = getattr(instance, col.name)
+        if col.name == "bbox" and value is not None:
+            d[col.name] = f"SRID=4326;{to_shape(value).wkt}"
+        else:
+            d[col.name] = value
+    return d
 
 
 def replication_file_url(

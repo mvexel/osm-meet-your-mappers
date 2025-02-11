@@ -8,12 +8,13 @@ from datetime import date, datetime
 from typing import Optional
 
 from lxml import etree
-from osm_changeset_loader.model import Changeset, ChangesetComment, ChangesetTag
+from osm_changeset_loader.config import Config
 from osm_changeset_loader.db import create_tables
+from osm_changeset_loader.model import Changeset, ChangesetComment, ChangesetTag
+from shapely.geometry import box
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
-
 from truncate_db import truncate_tables
 
 BATCH_SIZE = 50_000
@@ -87,6 +88,11 @@ def parse_changeset(
         "max_lat": float(elem.attrib.get("max_lat", 0)),
         "max_lon": float(elem.attrib.get("max_lon", 0)),
     }
+
+    # Add the new bbox field in EWKT format
+    cs["bbox"] = (
+        f"SRID=4326;{box(cs['min_lon'], cs['min_lat'], cs['max_lon'], cs['max_lat']).wkt}"
+    )
 
     # Parse tags.
     tags = [
@@ -167,7 +173,7 @@ def process_changeset_file(
         context = etree.iterparse(f, events=("end",), tag="changeset")
         with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
             futures = []
-            for event, elem in context:
+            for _, elem in context:
                 parsed = parse_changeset(elem, from_date, to_date)
                 if parsed:
                     cs, tags, comments = parsed
@@ -178,8 +184,9 @@ def process_changeset_file(
 
                     if processed % batch_size == 0:
                         batch_counter += 1
+                        min_created_at = min([cs["created_at"] for cs in cs_batch])
                         logging.info(
-                            f"Queueing batch #{batch_counter} with {len(cs_batch)} changesets"
+                            f"Queueing batch #{batch_counter} with {len(cs_batch)} changesets, starting at {min_created_at}"
                         )
                         # Submit the batch for processing.
                         futures.append(

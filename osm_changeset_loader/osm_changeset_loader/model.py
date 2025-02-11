@@ -1,14 +1,18 @@
 from datetime import datetime
+
+from geoalchemy2 import Geometry
+from geoalchemy2.shape import from_shape
+from shapely.geometry import box
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     DateTime,
     Float,
+    ForeignKey,
     Index,
     Integer,
     String,
-    ForeignKey,
-    BigInteger,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -50,19 +54,21 @@ class ChangesetComment(Base):
 class Changeset(Base):
     __tablename__ = "changesets"
 
-    # Indices for common query patterns
+    # Existing indices plus a new GiST index for the spatial column
     __table_args__ = (
         # Index for user lookups and grouping
         Index("idx_changesets_user", "user"),
         # Index for temporal queries
         Index("idx_changesets_created_at", "created_at"),
-        # Compound index for spatial queries (order matches how we typically filter)
+        # Compound index for spatial queries on raw coordinates
         Index("idx_changesets_bbox", "min_lon", "max_lon", "min_lat", "max_lat"),
         # Index for combined user+time queries
         Index("idx_changesets_user_created_at", "user", "created_at"),
         # New indices for query patterns
         Index("idx_changesets_num_changes", "num_changes"),
         Index("idx_changesets_comments_count", "comments_count"),
+        # GiST index on the new spatial column
+        Index("idx_changesets_bbox_geom", "bbox", postgresql_using="gist"),
     )
 
     id = Column(BigInteger, primary_key=True)
@@ -77,6 +83,8 @@ class Changeset(Base):
     min_lon = Column(Float)
     max_lat = Column(Float)
     max_lon = Column(Float)
+    bbox = Column(Geometry(geometry_type="POLYGON", srid=4326, spatial_index=True))
+
     tags = relationship(
         "ChangesetTag", back_populates="changeset", cascade="all, delete-orphan"
     )
@@ -97,6 +105,7 @@ class Changeset(Base):
                 return None
         except ValueError:
             return None
+
         changeset.user = elem.attrib.get("user", None)
         changeset.uid = int(elem.attrib.get("uid", 0))
         changeset.created_at = (
@@ -116,6 +125,18 @@ class Changeset(Base):
         changeset.min_lon = float(elem.attrib.get("min_lon", 0))
         changeset.max_lat = float(elem.attrib.get("max_lat", 0))
         changeset.max_lon = float(elem.attrib.get("max_lon", 0))
+
+        # Set the new bbox field using shapely and geoalchemy2.
+        # Create a box using (min_lon, min_lat, max_lon, max_lat)
+        changeset.bbox = from_shape(
+            box(
+                changeset.min_lon,
+                changeset.min_lat,
+                changeset.max_lon,
+                changeset.max_lat,
+            ),
+            srid=4326,
+        )
 
         # Parse tags
         changeset.tags = [
