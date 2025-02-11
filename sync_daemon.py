@@ -32,12 +32,17 @@ class SyncDaemon:
         
     def update_metadata(self, session: Session, sequence: int, success: bool = True) -> None:
         """Update metadata with the latest processed state"""
-        metadata = Metadata(
-            timestamp=datetime.utcnow(),
-            state=f"sequence:{sequence}:{'success' if success else 'failed'}"
-        )
-        session.add(metadata)
-        session.commit()
+        try:
+            metadata = Metadata(
+                timestamp=datetime.utcnow(),
+                state=f"sequence:{sequence}:{'success' if success else 'failed'}"
+            )
+            session.add(metadata)
+            session.commit()
+            logger.debug(f"Updated metadata for sequence {sequence} (success={success})")
+        except Exception as e:
+            logger.error(f"Failed to update metadata for sequence {sequence}: {e}")
+            session.rollback()
 
     def process_sequence(self, sequence: int, session: Session) -> bool:
         """Process a single replication sequence"""
