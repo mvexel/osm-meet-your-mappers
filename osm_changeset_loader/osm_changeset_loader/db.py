@@ -7,18 +7,17 @@ from sqlalchemy import create_engine, and_, func
 from sqlalchemy.orm import Session
 from sqlalchemy_utils import database_exists, drop_database, create_database
 from .model import Changeset, ChangesetComment, ChangesetTag, Metadata, Base
+from osm_changeset_loader.config import Config
 
-DB_URL = "postgresql://mvexel@localhost:5432/osm"
 
-
-def get_db_engine(db_url=DB_URL):
+def get_db_engine(db_url=Config.DB_URL):
     """
     Get a database engine.
     """
     return create_engine(db_url)
 
 
-def get_db_session(db_url=DB_URL):
+def get_db_session(db_url=Config.DB_URL):
     """
     Get a database session.
     """
@@ -26,7 +25,7 @@ def get_db_session(db_url=DB_URL):
     return Session(engine)
 
 
-def create_tables(db_url=DB_URL):
+def create_tables(db_url=Config.DB_URL):
     """
     Create database tables.
     """
@@ -79,7 +78,7 @@ def query_changesets(
     return query.offset(offset).limit(limit).all()
 
 
-def get_oldest_changeset_timestamp(db_url=DB_URL):
+def get_oldest_changeset_timestamp(db_url=Config.DB_URL):
     """
     Get the timestamp of the oldest changeset in the database.
     """
@@ -94,7 +93,7 @@ def get_mapper_statistics(
     min_lat: float,
     max_lat: float,
     min_changesets: int,
-    db_url=DB_URL,
+    db_url=Config.DB_URL,
 ):
     """
     Get mapper statistics within a bounding box.
@@ -109,6 +108,7 @@ def get_mapper_statistics(
         db_url: Database connection URL
     """
     session = get_db_session(db_url)
+    query_box = func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
     return (
         session.query(
             Changeset.user,
@@ -116,24 +116,15 @@ def get_mapper_statistics(
             func.min(Changeset.created_at).label("first_change"),
             func.max(Changeset.created_at).label("last_change"),
         )
-        .filter(
-            and_(
-                # Changeset min coordinates must be greater than or equal to query min
-                Changeset.min_lon >= min_lon,
-                Changeset.min_lat >= min_lat,
-                # Changeset max coordinates must be less than or equal to query max
-                Changeset.max_lon <= max_lon,
-                Changeset.max_lat <= max_lat,
-            )
-        )
+        .filter(func.ST_Within(Changeset.bbox, query_box))
         .group_by(Changeset.user)
-        .order_by(func.count(Changeset.id).desc())  # Order by most active mappers first
         .having(func.count(Changeset.id) >= min_changesets)
+        .order_by(func.count(Changeset.id).desc())
         .all()
     )
 
 
-def rebuild_database(db_url=DB_URL):
+def rebuild_database(db_url=Config.DB_URL):
     """
     Drop and recreate the entire database, then create all tables.
 
