@@ -10,14 +10,14 @@ The API supports:
 - Retrieving mapper statistics for a geographic area
 """
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
 import os
-from .model import Changeset
+from .model import Changeset, Metadata
 from .db import query_changesets, get_oldest_changeset_timestamp, get_mapper_statistics
 
 
@@ -40,7 +40,16 @@ class ChangesetResponse(BaseModel):
         from_attributes = True
 
 
+class MetadataResponse(BaseModel):
+    state: str
+    timestamp: datetime
+
+    class Config:
+        orm_mode = True
+
+
 app = FastAPI()
+
 
 # Get the directory containing this file
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -48,6 +57,7 @@ static_dir = os.path.join(current_dir, "static")
 
 # Mount the static directory
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 
 @app.get("/")
 async def root():
@@ -223,6 +233,30 @@ async def get_mappers(
         }
         for stat in mapper_stats
     ]
+
+
+@app.get(
+    "/metadata",
+    response_model=MetadataResponse,
+    summary="Get replication metadata state",
+    description="Returns the latest replication sequence (as stored in the Metadata table) and timestamp, indicating how far back data have been loaded.",
+)
+async def get_metadata():
+    """
+    Retrieve the replication metadata state from the database.
+    This shows the lowest replication sequence number processed and its timestamp.
+    """
+    # Assume that SessionLocal is defined in your .db module.
+    from .db import get_db_session
+
+    db = get_db_session()
+    try:
+        meta = db.query(Metadata).filter(Metadata.id == 1).first()
+        if meta is None:
+            raise HTTPException(status_code=404, detail="Metadata not found")
+        return meta
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":

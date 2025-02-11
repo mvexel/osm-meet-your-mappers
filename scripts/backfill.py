@@ -6,20 +6,22 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, List, Set
+from datetime import datetime
+from typing import Any, List, Optional, Set, Tuple
 
 import requests
 import yaml
 from lxml import etree
-from osm_changeset_loader.db import create_engine
-from osm_changeset_loader.model import Changeset
+from osm_changeset_loader.db import create_engine  # your engine setup
+from osm_changeset_loader.model import Changeset, Metadata
 from sqlalchemy import select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker  # type: ignore
 from sqlalchemy.pool import QueuePool
 from archive_loader import insert_batch
 
-# Global lock to serialize duplicate-check plus insertion operations.
+# Global locks to serialize duplicate checking/insertion and metadata updates.
 insert_lock = threading.Lock()
+metadata_lock = threading.Lock()
 
 
 def model_to_dict(instance) -> dict:
@@ -115,27 +117,32 @@ def get_duplicate_ids(SessionMaker: Any, cs_list: List[dict]) -> Set[int]:
 
 def process_replication_content(
     xml_bytes: bytes, SessionMaker: Any, batch_size: int
-) -> bool:
+) -> Tuple[bool, Optional[datetime]]:
     """
     Process the XML content (bytes) of a replication file using a streaming parser.
 
     Only closed changesets (where cs_obj.open is False) are processed. The function accumulates
     batches of changesets and, under a global lock, queries for duplicates and inserts only new ones.
 
-    Returns True if the replication file produced zero new changesets.
+    Returns a tuple:
+        (file_empty, min_new_timestamp)
+      - file_empty: True if the replication file produced zero new changesets.
+      - min_new_timestamp: The oldest 'created_at' timestamp among new changesets inserted in this file, or None.
     """
     cs_batch: List[dict] = []
     tag_batch: List[dict] = []
     comment_batch: List[dict] = []
     processed = 0
     new_changesets_in_file = 0
+    min_new_ts: Optional[datetime] = None
 
     stream = io.BytesIO(xml_bytes)
     context = etree.iterparse(stream, events=("end",), tag="changeset")
     for _, elem in context:
         cs_obj = Changeset.from_xml(elem)
-        if cs_obj and not cs_obj.open:  # process only closed changesets
-            cs_batch.append(model_to_dict(cs_obj))
+        if cs_obj and not cs_obj.open:  # only process closed changesets
+            cs_dict = model_to_dict(cs_obj)
+            cs_batch.append(cs_dict)
             tag_batch.extend([model_to_dict(tag) for tag in cs_obj.tags])
             comment_batch.extend(
                 [model_to_dict(comment) for comment in cs_obj.comments]
@@ -154,9 +161,12 @@ def process_replication_content(
                         for comment in comment_batch
                         if comment["changeset_id"] not in dup_ids
                     ]
-                    new_count = len(new_cs_batch)
-                    new_changesets_in_file += new_count
-                    if new_count > 0:
+                    if new_cs_batch:
+                        batch_min = min(cs["created_at"] for cs in new_cs_batch)
+                        if min_new_ts is None or batch_min < min_new_ts:
+                            min_new_ts = batch_min
+                        new_count = len(new_cs_batch)
+                        new_changesets_in_file += new_count
                         logging.info(
                             f"Inserting batch of {new_count} new changesets (from {len(cs_batch)} closed changesets)"
                         )
@@ -183,9 +193,12 @@ def process_replication_content(
                 for comment in comment_batch
                 if comment["changeset_id"] not in dup_ids
             ]
-            new_count = len(new_cs_batch)
-            new_changesets_in_file += new_count
-            if new_count > 0:
+            if new_cs_batch:
+                batch_min = min(cs["created_at"] for cs in new_cs_batch)
+                if min_new_ts is None or batch_min < min_new_ts:
+                    min_new_ts = batch_min
+                new_count = len(new_cs_batch)
+                new_changesets_in_file += new_count
                 logging.info(
                     f"Inserting final batch of {new_count} new changesets (from {len(cs_batch)} closed changesets)"
                 )
@@ -195,12 +208,52 @@ def process_replication_content(
     logging.info(
         f"Finished processing replication file: {processed} closed changesets parsed. New changesets: {new_changesets_in_file}"
     )
-    return new_changesets_in_file == 0
+    file_empty = new_changesets_in_file == 0
+    return file_empty, min_new_ts
+
+
+def update_metadata_state(new_ts: datetime, SessionMaker: Any) -> None:
+    """
+    Update the Metadata table (row with id==1) so that its state field reflects the oldest changeset timestamp.
+    For backwards replication, update only if the new timestamp is older than the current state.
+    This operation is serialized using a global lock.
+    """
+    with metadata_lock:
+        session = SessionMaker()
+        try:
+            row = session.query(Metadata).filter(Metadata.id == 1).first()
+            now = datetime.utcnow()
+            if row is None:
+                # Explicitly set the id to 1 so that we update the same row in future calls.
+                row = Metadata(id=1, state=new_ts.isoformat(), timestamp=now)
+                session.add(row)
+                logging.info(f"Inserted metadata state: {new_ts.isoformat()}")
+            else:
+                try:
+                    current_state_ts = datetime.fromisoformat(row.state)
+                except Exception:
+                    current_state_ts = None
+                # For backwards replication, update only if the new timestamp is older.
+                if current_state_ts is None or new_ts < current_state_ts:
+                    old_state = row.state
+                    row.state = new_ts.isoformat()
+                    row.timestamp = now
+                    logging.info(
+                        f"Updated metadata state from {old_state} to {new_ts.isoformat()}"
+                    )
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            logging.error(
+                f"Failed to update metadata state for timestamp {new_ts.isoformat()}: {e}"
+            )
+        finally:
+            session.close()
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Continuously backfill the changeset database from OSM replication files (backwards replication) using multithreading."
+        description="Continuously backfill the changeset database from OSM replication files (backwards replication) using multithreading, updating metadata state with the oldest changeset timestamp."
     )
     parser.add_argument(
         "db_url", help="SQLAlchemy database URL (e.g. postgresql://user:pass@host/db)"
@@ -254,9 +307,9 @@ def main() -> None:
             time.sleep(args.sleep_time)
             continue
 
-        # Process backward in blocks concurrently.
         work_done_overall = False
         seq = current_seq
+        # Process replication files in descending order until we reach --min-seq.
         while seq > args.min_seq:
             # Build a block of sequence numbers (in descending order).
             block = list(range(seq, max(args.min_seq, seq - args.block_size) - 1, -1))
@@ -265,26 +318,26 @@ def main() -> None:
 
             block_new_work = False
 
-            def process_single_file(s: int) -> bool:
+            def process_single_file(s: int) -> Tuple[bool, Optional[datetime]]:
                 try:
                     xml_bytes = download_with_retry(
                         s, req_session, retries=3, initial_delay=2.0
                     )
-                    # Returns True if the file produced zero new changesets.
                     return process_replication_content(
                         xml_bytes, SessionMaker, args.batch_size
                     )
                 except Exception as e:
                     logging.error(f"Failed to process sequence {s}: {e}")
-                    # If a file fails, we treat it as “empty” so that we don’t erroneously assume new work.
-                    return True
+                    return True, None
 
             with ThreadPoolExecutor(max_workers=args.block_size) as executor:
                 futures = {executor.submit(process_single_file, s): s for s in block}
                 for future in as_completed(futures):
                     s = futures[future]
                     try:
-                        file_empty = future.result()
+                        file_empty, min_new_ts = future.result()
+                        if min_new_ts is not None:
+                            update_metadata_state(min_new_ts, SessionMaker)
                         if not file_empty:
                             block_new_work = True
                     except Exception as e:
@@ -296,7 +349,7 @@ def main() -> None:
             # Update seq to the smallest sequence in this block minus one.
             seq = min(block) - 1
 
-            # If the entire block produced no new changesets, assume we’ve caught up and break.
+            # If the entire block produced no new changesets, assume we've caught up.
             if not block_new_work:
                 logging.info(
                     "No new changesets found in this block; stopping backward processing."
