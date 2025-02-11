@@ -121,7 +121,7 @@ class SyncDaemon:
                         continue
                         
                     if remote_sequence > last_processed:
-                    logger.info(f"New sequences available: {last_processed+1} to {remote_sequence}")
+                        logger.info(f"New sequences available: {last_processed+1} to {remote_sequence}")
                     for sequence in range(last_processed + 1, remote_sequence + 1):
                         if self.stop_event.is_set():
                             break
