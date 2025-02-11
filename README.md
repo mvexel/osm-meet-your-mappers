@@ -2,7 +2,7 @@
 
 ## Features
 
- - Loads changeset data from OSM replication files
+ - Loads changeset data from OSM archive files
  - Stores changesets, tags, and comments in PostgreSQL
  - REST API for querying changesets and mapper statistics
  - Supports filtering by:
@@ -156,7 +156,6 @@ Interactive API documentation is available at:
  #### Configuration
 
  Configure the catch-up process in `osm_changeset_loader/config.py`:
- - `REPLICATION_URL`: Base URL for OSM replication data
  - `SLEEP_INTERVAL`: Time between checking for new changesets
  - `HISTORICAL_THREADS`: Number of threads for processing historical data
 

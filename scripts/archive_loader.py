@@ -13,7 +13,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 
-from truncate_db import truncate_tables
+from scripts.truncate_db import truncate_tables
 
 BATCH_SIZE = 50_000
 NUM_WORKERS = 4
