@@ -1,6 +1,6 @@
 """OSM replication API client."""
 
-from typing import Optional, List
+from typing import Optional, List, Dict
 import logging
 import gzip
 import requests
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class ReplicationClient:
     config: Config
 
-    def get_remote_state(self) -> Optional[Path]:
+    def get_remote_state(self) -> Optional[Dict[str, any]]:
         """Get replication state from the OSM API
         by querying state.yaml"""
         try:
@@ -37,7 +37,43 @@ class ReplicationClient:
             logging.error(f"Error processing state.yaml: {e}")
             return None
 
-    def get_changesets(self, path: Path) -> Optional[List[Changeset]]:
+    def backfill_changesets(self):
+        """Backfill changesets by working backwards from the latest sequence."""
+        state = self.get_remote_state()
+        if not state:
+            logger.error("Failed to fetch remote state.")
+            return
+
+        current_sequence = state["sequence"]
+
+        while current_sequence >= 0:
+            path = Path(sequence=current_sequence)
+            changesets = self.get_changesets(path)
+
+            if not changesets:
+                logger.info(f"No changesets found for sequence {current_sequence}.")
+                current_sequence -= 1
+                continue
+
+            for changeset in changesets:
+                if self.changeset_exists(changeset.id):
+                    logger.info(f"Changeset {changeset.id} already exists. Stopping backfill.")
+                    return
+
+                self.insert_changeset(changeset)
+
+            logger.info(f"Processed sequence {current_sequence}.")
+            current_sequence -= 1
+
+    def changeset_exists(self, changeset_id: int) -> bool:
+        """Check if a changeset already exists in the database."""
+        # Implement database query to check for existing changeset
+        pass
+
+    def insert_changeset(self, changeset: Changeset):
+        """Insert a new changeset into the database."""
+        # Implement database insertion logic
+        pass
         """Get changeset objects from replication path."""
         url = path.to_url()
         try:
