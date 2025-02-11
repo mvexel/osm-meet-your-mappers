@@ -19,7 +19,7 @@ replication_client = ReplicationClient(config)
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Change to DEBUG for more verbose output
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)

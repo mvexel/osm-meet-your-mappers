@@ -29,12 +29,17 @@ class ReplicationClient:
                 return None
                 
             # Get current sequence by checking recent state files
-            current = StateFile(6_000_000)  # Start with a reasonable current guess
+            # Start with sequence 6M (early 2024) and work backwards
+            current = StateFile(6_000_000)
+            logger.debug(f"Trying to find current state starting from sequence {current.sequence}")
             while True:
+                logger.debug(f"Checking sequence {current.sequence}")
                 if current.fetch():
+                    logger.info(f"Found current sequence: {current.sequence} with timestamp {current.timestamp}")
                     return Path(sequence=current.sequence)
                 current = StateFile(current.sequence - 100_000)
-                if current.sequence < 1:
+                if current.sequence < 2_007_990:  # This is when state files started
+                    logger.warning("Reached earliest available state file (2007990), stopping search")
                     return None
                     
         except Exception as e:

@@ -27,9 +27,11 @@ class StateFile:
     def fetch(self) -> Optional[datetime]:
         """Fetch and parse the state file, returns timestamp if successful"""
         try:
+            logger.debug(f"Fetching state file from {self.url}")
             response = requests.get(self.url, timeout=30)
             response.raise_for_status()
             
+            logger.debug(f"Got response: {response.text}")
             # Parse timestamp from state file
             # Example format: timestamp=2020-01-01T05:46:00Z
             match = re.search(r'timestamp=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)', 
@@ -54,7 +56,7 @@ class StateFile:
 
 def find_sequence_for_timestamp(
     target_time: datetime,
-    start_seq: int = 1,
+    start_seq: int = 2_007_990,  # First sequence with state file
     end_seq: Optional[int] = None
 ) -> Optional[int]:
     """
