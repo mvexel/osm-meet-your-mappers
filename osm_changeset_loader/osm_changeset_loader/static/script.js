@@ -116,7 +116,8 @@ function computeBbox(center, areaType) {
 // Render a sortable table using Tablesort.
 function displayMappers(data) {
   currentData = data; // Store the data for export
-  data.sort((a, b) => new Date(b.last_change) - new Date(a.last_change));
+  // data.sort((a, b) => new Date(b.last_change) - new Date(a.last_change));
+  data.sort(changeset_count);
 
   resultsDiv.innerHTML = "";
   exportContainer.style.display = data.length > 0 ? "block" : "none";
