@@ -51,13 +51,25 @@ export DATABASE_URL="postgresql://osm:your_password@localhost/osm_changesets"
 
 ## API Documentation
 
-The OSM Changeset Loader provides a REST API for querying changesets. The API is built using FastAPI and provides the following endpoint:
+The OSM Changeset Loader provides a REST API for querying changesets and mapper statistics. The API is built using FastAPI and provides the following endpoints:
 
 ### GET /changesets/
 
+### GET /oldest
+
+Retrieve the timestamp of the oldest changeset stored in the database.
+
+### GET /mappers/
+
+Retrieve statistics about mappers who have contributed within a specified geographic area.
+
+### GET /metadata
+
+Returns the latest replication sequence and timestamp, indicating how far back data have been loaded.
+
 Query parameters:
 - `min_lon` (float): Minimum longitude for bounding box filter
-- `max_lon` (float): Maximum longitude for bounding box filter  
+- `max_lon` (float): Maximum longitude for bounding box filter
 - `min_lat` (float): Minimum latitude for bounding box filter
 - `max_lat` (float): Maximum latitude for bounding box filter
 - `user` (string): Filter by username
