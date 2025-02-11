@@ -11,6 +11,7 @@ from datetime import datetime
 from .model import Changeset
 from .path import Path
 from .config import Config
+from .state import StateFile, find_sequence_for_timestamp
 
 
 @dataclass
@@ -20,30 +21,23 @@ class ReplicationClient:
     def get_remote_state(self, for_timestamp: datetime = None) -> Optional[Path]:
         """Get replication state from the OSM API, optionally for a specific timestamp."""
         try:
-            response = requests.get(f"{self.config.REPLICATION_URL}/state.yaml")
-            response.raise_for_status()
-            state = response.text.split("\n")[2]
-            _, sequence = state.split(": ")
-            sequence = sequence.strip()
-            sequence = int(sequence.strip())
-
             if for_timestamp:
-                # Estimate sequence number based on timestamp (sequences are 1 per minute)
-                state_time = datetime.strptime(
-                    response.text.split("\n")[1].split(": ")[1].split(".")[0],
-                    "%Y-%m-%d %H:%M:%S",
-                )
-                if for_timestamp > state_time:
-                    return Path(
-                        sequence=sequence
-                    )  # If desired time is after state, use latest
-                time_diff = state_time - for_timestamp
-                return Path(
-                    sequence=max(1, sequence - int(time_diff.total_seconds() // 60))
-                )
-
-            return Path(sequence=sequence)
-        except requests.RequestException as e:
+                # Find the sequence number for this timestamp
+                sequence = find_sequence_for_timestamp(for_timestamp)
+                if sequence:
+                    return Path(sequence=sequence)
+                return None
+                
+            # Get current sequence by checking recent state files
+            current = StateFile(6_000_000)  # Start with a reasonable current guess
+            while True:
+                if current.fetch():
+                    return Path(sequence=current.sequence)
+                current = StateFile(current.sequence - 100_000)
+                if current.sequence < 1:
+                    return None
+                    
+        except Exception as e:
             logging.error(f"Error fetching remote state: {e}")
             return None
 
