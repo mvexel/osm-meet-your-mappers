@@ -4,16 +4,17 @@ import bz2
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime
+from typing import Optional
 
 from lxml import etree
-from osm_changeset_loader.db import create_database, create_tables
 from osm_changeset_loader.model import Changeset, ChangesetComment, ChangesetTag
+from osm_changeset_loader.db import create_tables
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 
-from scripts.truncate_db import truncate_tables
+from truncate_db import truncate_tables
 
 BATCH_SIZE = 50_000
 NUM_WORKERS = 4
@@ -48,7 +49,9 @@ def parse_datetime(dt_str):
         return None
 
 
-def parse_changeset(elem, from_date=None, to_date=None):
+def parse_changeset(
+    elem: etree._Element, from_date: Optional[date], to_date=Optional[date]
+):
     """
     Given an lxml element representing a <changeset>, extract a tuple:
        (changeset_dict, list_of_tags, list_of_comments)
@@ -65,9 +68,9 @@ def parse_changeset(elem, from_date=None, to_date=None):
         return None  # Invalid datetime, skip
 
     # Apply date filtering early
-    if from_date and created_at.date() < datetime.strptime(from_date, "%Y%m%d").date():
+    if from_date and created_at.date() < from_date:
         return None
-    if to_date and created_at.date() > datetime.strptime(to_date, "%Y%m%d").date():
+    if to_date and created_at.date() > to_date:
         return None
 
     cs = {
@@ -132,11 +135,11 @@ def insert_batch(Session, cs_batch, tag_batch, comment_batch):
     try:
         with disable_foreign_keys(session):
             if cs_batch:
-                session.execute(Changeset.__table__.insert(), cs_batch)
+                session.bulk_insert_mappings(Changeset, cs_batch)
             if tag_batch:
-                session.execute(ChangesetTag.__table__.insert(), tag_batch)
+                session.bulk_insert_mappings(ChangesetTag, tag_batch)
             if comment_batch:
-                session.execute(ChangesetComment.__table__.insert(), comment_batch)
+                session.bulk_insert_mappings(ChangesetComment, comment_batch)
             session.commit()
     except Exception as ex:
         session.rollback()
@@ -226,7 +229,10 @@ def main():
         "--batch-size", type=int, default=BATCH_SIZE, help="Batch size for bulk inserts"
     )
     parser.add_argument(
-        "--truncate", type=bool, default=True, help="Truncate the tables before loading"
+        "--no-truncate",
+        action="store_false",
+        dest="truncate",
+        help="Do not truncate the tables before loading",
     )
     parser.add_argument(
         "--from_date",
@@ -249,6 +255,11 @@ def main():
     if args.truncate:
         truncate_tables()
 
+    from_date = (
+        datetime.strptime(args.from_date, "%Y%m%d").date() if args.from_date else None
+    )
+    to_date = datetime.strptime(args.to_date, "%Y%m%d").date() if args.to_date else None
+
     # Configure the engine with a connection pool.
     engine = create_engine(
         args.db_url,
@@ -260,14 +271,19 @@ def main():
     )
     Session = sessionmaker(bind=engine)
 
+    logging.info(
+        f"Going to process {args.changeset_file} from {from_date} to {to_date}"
+    )
+
     process_changeset_file(
         args.changeset_file,
         Session,
-        from_date=args.from_date,
-        to_date=args.to_date,
+        from_date=from_date,
+        to_date=to_date,
         batch_size=args.batch_size,
     )
 
 
 if __name__ == "__main__":
+    create_tables()
     main()
