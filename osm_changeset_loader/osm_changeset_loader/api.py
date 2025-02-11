@@ -19,6 +19,7 @@ from pydantic import BaseModel
 import os
 from .model import Changeset, Metadata
 from .db import query_changesets, get_oldest_changeset_timestamp, get_mapper_statistics
+from .config import Config
 
 
 class ChangesetResponse(BaseModel):
@@ -194,7 +195,9 @@ async def get_mappers(
         le=90,
     ),
     min_changesets: int = Query(
-        10, description="Minimum number of changesets for a user", ge=1
+        Config.MIN_CHANGESETS,
+        description="Minimum number of changesets for a user",
+        ge=1,
     ),
 ):
     """
