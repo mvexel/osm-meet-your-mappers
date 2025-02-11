@@ -79,9 +79,6 @@ class SyncDaemon:
             current_sequence = remote_state.sequence
             last_processed = get_last_processed_sequence()
             
-            if last_processed >= current_sequence:
-                logger.info("No backfill needed - database is up to date")
-                return
                 
             logger.info(f"Starting backfill from sequence {current_sequence}")
             
@@ -123,23 +120,23 @@ class SyncDaemon:
                         time.sleep(60)
                         continue
                         
-                    if remote_sequence > last_processed:
-                        logger.info(f"New sequences available: {last_processed+1} to {remote_sequence}")
-                        for sequence in range(last_processed + 1, remote_sequence + 1):
-                            if self.stop_event.is_set():
-                                break
-                            self.process_sequence(sequence, session)
-                    else:
-                        logger.debug(f"No new sequences available (current={remote_sequence}, last_processed={last_processed})")
-                            
-                    time.sleep(60)  # Check every minute
-                    
-                except Exception as e:
-                    logger.error(f"Error in forward sync: {e}")
-                    time.sleep(30)
-                    
-        finally:
-            session.close()
+                if remote_sequence > last_processed:
+                    logger.info(f"New sequences available: {last_processed+1} to {remote_sequence}")
+                    for sequence in range(last_processed + 1, remote_sequence + 1):
+                        if self.stop_event.is_set():
+                            break
+                        self.process_sequence(sequence, session)
+                else:
+                    logger.debug(f"No new sequences available (current={remote_sequence}, last_processed={last_processed})")
+
+                time.sleep(60)  # Check every minute
+
+            except Exception as e:
+                logger.error(f"Error in forward sync: {e}")
+                time.sleep(30)
+
+    finally:
+        session.close()
 
     def start(self):
         """Start the sync daemon threads"""
