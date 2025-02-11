@@ -69,17 +69,7 @@ async def root():
     "/changesets/",
     response_model=List[ChangesetResponse],
     summary="Query changesets",
-    description="""
-    Retrieve OpenStreetMap changesets with optional filtering parameters.
-    
-    Use this endpoint to search for changesets within specific geographic bounds,
-    time ranges, or by specific users. Results are paginated for better performance.
-    
-    Example use cases:
-    - Find all changesets in a specific city or region
-    - Track recent mapping activity in an area
-    - Monitor contributions from specific users
-    """,
+    description="Retrieve OpenStreetMap changesets with optional filtering parameters.",
     response_description="List of changesets matching the query parameters",
 )
 async def get_changesets(
@@ -155,14 +145,7 @@ async def get_changesets(
 @app.get(
     "/oldest",
     summary="Get oldest changeset timestamp",
-    description="""
-    Retrieve the timestamp of the oldest changeset stored in the database.
-    
-    This endpoint is useful for:
-    - Determining the temporal coverage of the database
-    - Checking when data collection began
-    - Planning historical analysis
-    """,
+    description="Retrieve the timestamp of the oldest changeset stored in the database.",
     response_description="Timestamp of the oldest changeset in ISO format",
 )
 async def get_oldest_changeset():
@@ -178,16 +161,7 @@ async def get_oldest_changeset():
 @app.get(
     "/mappers/",
     summary="Get mapper statistics",
-    description="""
-    Retrieve statistics about mappers who have contributed within a specified geographic area.
-    
-    This endpoint provides insights into:
-    - Who is actively mapping in an area
-    - How many changesets each mapper has contributed
-    - When each mapper last made changes
-    
-    The bounding box parameters are required to limit the geographic scope of the query.
-    """,
+    description="Retrieve statistics about mappers who have contributed within a specified geographic area.",
     response_description="List of mapper statistics including changeset counts and last activity",
 )
 async def get_mappers(
@@ -219,11 +193,16 @@ async def get_mappers(
         ge=-90,
         le=90,
     ),
+    min_changesets: int = Query(
+        10, description="Minimum number of changesets for a user", ge=1
+    ),
 ):
     """
     Retrieve all unique mappers with number of changes and date of most recent change for a bounding box.
     """
-    mapper_stats = get_mapper_statistics(min_lon, max_lon, min_lat, max_lat)
+    mapper_stats = get_mapper_statistics(
+        min_lon, max_lon, min_lat, max_lat, min_changesets
+    )
     return [
         {
             "user": stat.user,

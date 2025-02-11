@@ -93,6 +93,7 @@ def get_mapper_statistics(
     max_lon: float,
     min_lat: float,
     max_lat: float,
+    min_changesets: int,
     db_url=DB_URL,
 ):
     """
@@ -127,6 +128,7 @@ def get_mapper_statistics(
         )
         .group_by(Changeset.user)
         .order_by(func.count(Changeset.id).desc())  # Order by most active mappers first
+        .having(func.count(Changeset.id) >= min_changesets)
         .all()
     )
 
