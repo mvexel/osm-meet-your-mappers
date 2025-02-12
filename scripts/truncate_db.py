@@ -1,10 +1,12 @@
 import logging
 from sqlalchemy import text
-from osm_changeset_loader.db import get_db_session
-from osm_changeset_loader.model import Changeset, ChangesetTag, ChangesetComment, Metadata
+from osm_meet_your_mappers.db import get_db_session
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 
 def truncate_tables():
     """
@@ -31,6 +33,7 @@ def truncate_tables():
         session.rollback()
     finally:
         session.close()
+
 
 if __name__ == "__main__":
     truncate_tables()

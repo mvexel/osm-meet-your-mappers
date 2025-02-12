@@ -8,9 +8,8 @@ from datetime import date, datetime
 from typing import Optional
 
 from lxml import etree
-from osm_changeset_loader.config import Config
-from osm_changeset_loader.db import create_tables
-from osm_changeset_loader.model import Changeset, ChangesetComment, ChangesetTag
+from osm_meet_your_mappers.db import create_tables
+from osm_meet_your_mappers.model import Changeset, ChangesetComment, ChangesetTag
 from shapely.geometry import box
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker

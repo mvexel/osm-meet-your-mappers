@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from geoalchemy2 import alembic_helpers
-from osm_changeset_loader.model import Base
+from osm_meet_your_mappers.model import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
