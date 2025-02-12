@@ -31,25 +31,25 @@ class Config:
 
 3. Create the database tables:
 ```bash
-/opt/osm-changeset-loader/bin/python -c "from osm_changeset_loader.db import create_tables; create_tables()"
+/opt/osm-meet-your-mappers/bin/python -c "from osm_changeset_loader.db import create_tables; create_tables()"
 ```
 
 ## Service Installation
 
  # Install the package in a virtualenv
- python3 -m venv /opt/osm-changeset-loader
- /opt/osm-changeset-loader/bin/pip install -e .
+ python3 -m venv /opt/osm-meet-your-mappers
+ /opt/osm-meet-your-mappers/bin/pip install -e .
 
  # Create system user
  sudo useradd -r -s /usr/sbin/nologin osm
 
  # Install service file
- sudo cp scripts/osm-changeset-loader.service /etc/systemd/system/
+ sudo cp scripts/osm-meet-your-mappers.service /etc/systemd/system/
  sudo systemctl daemon-reload
 
  # Enable and start the service
- sudo systemctl enable osm-changeset-loader
- sudo systemctl start osm-changeset-loader
+ sudo systemctl enable osm-meet-your-mappers
+ sudo systemctl start osm-meet-your-mappers
 
 ## API Documentation
 
@@ -96,8 +96,8 @@ Interactive API documentation is available when you run the API at
  [Service]
  Type=simple
  User=osm
- WorkingDirectory=/opt/osm-changeset-loader
- ExecStart=/opt/osm-changeset-loader/venv/bin/python backfill.py
+ WorkingDirectory=/opt/osm-meet-your-mappers
+ ExecStart=/opt/osm-meet-your-mappers/venv/bin/python backfill.py
  Restart=on-failure
  RestartSec=30
 
