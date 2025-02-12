@@ -13,6 +13,7 @@ from osm_meet_your_mappers.model import Changeset, ChangesetComment, ChangesetTa
 from osm_meet_your_mappers.config import Config
 from shapely.geometry import box
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 from truncate_db import truncate_tables
@@ -222,6 +223,32 @@ def process_changeset_file(
     logging.info(f"Finished processing {processed} changesets from main file.")
 
 
+def ensure_database_exists(db_url):
+    """
+    Ensure that the target database exists.
+    This function connects to a default database (usually 'postgres')
+    and creates the target database if it doesn't exist.
+    """
+    url = make_url(db_url)
+    target_db = url.database
+
+    # Change to the default database (commonly 'postgres')
+    default_url = url.set(database="postgres")
+    engine = create_engine(default_url)
+
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT 1 FROM pg_database WHERE datname = :dbname"),
+            {"dbname": target_db},
+        )
+        exists = result.scalar() is not None
+        if not exists:
+            conn.execute(text(f'CREATE DATABASE "{target_db}"'))
+            logging.info(f"Database '{target_db}' created.")
+        else:
+            logging.info(f"Database '{target_db}' already exists.")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Populate the database from OSM .osm.bz files."
@@ -265,6 +292,9 @@ def main():
         format="%(asctime)s %(levelname)s: %(message)s",
     )
 
+    # Ensure the target database exists.
+    ensure_database_exists(args.db_url)
+
     # Configure the engine with a connection pool.
     engine = create_engine(
         args.db_url,
@@ -281,14 +311,14 @@ def main():
             tables_exist = conn.execute(
                 text(
                     """
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_name = 'changesets'
-                )
-            """
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_name = 'changesets'
+                    )
+                    """
                 )
             ).scalar()
-            logging.info(f"tables exist: {tables_exist}")
+            logging.info(f"Tables exist: {tables_exist}")
 
             if tables_exist:
                 logging.warning("Truncating existing tables")
@@ -318,5 +348,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # Skip table creation since they should already exist
     main()
