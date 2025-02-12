@@ -264,6 +264,20 @@ def update_metadata_state(new_ts: datetime, SessionMaker: Any) -> None:
             session.close()
 
 
+def wait_for_db(engine, max_retries=30, delay=1):
+    """Wait for database to become available"""
+    retries = 0
+    while retries < max_retries:
+        try:
+            with engine.connect() as conn:
+                conn.execute(select(1))
+                return True
+        except Exception as e:
+            logging.warning(f"Database connection failed (attempt {retries + 1}/{max_retries}): {e}")
+            time.sleep(delay)
+            retries += 1
+    return False
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Continuously backfill the changeset database from OSM replication files (backwards replication) using multithreading, updating metadata state with the oldest changeset timestamp."
@@ -281,6 +295,12 @@ def main() -> None:
         pool_timeout=30,
         pool_pre_ping=True,
     )
+    
+    # Wait for database to become available
+    if not wait_for_db(engine):
+        logging.error("Failed to connect to database after multiple attempts. Exiting.")
+        return
+
     SessionMaker = sessionmaker(bind=engine)
     req_session = requests.Session()
 
