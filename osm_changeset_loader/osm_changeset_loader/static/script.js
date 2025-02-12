@@ -221,22 +221,20 @@ const dataHandler = {
 // Map & Drawing Integration
 // ================================
 
-let map, drawnItems, drawRectangle; // drawRectangle will be our drawing handler
+let map, drawnItems, drawRectangle;
 
 function initializeMap() {
-  // Create the map with a default center and zoom level (in case geolocation fails)
   map = L.map("map", { zoomControl: false }).setView([51.505, -0.09], 13);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "&copy; OpenStreetMap contributors",
   }).addTo(map);
 
-  // Attempt to use geolocation to pan the map to the user's location
+  // Attempt geolocate
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const lat = position.coords.latitude;
         const lon = position.coords.longitude;
-        // Pan the map to the user's location
         map.setView([lat, lon], 10);
       },
       (error) => {
@@ -252,11 +250,11 @@ function initializeMap() {
     console.log("Geolocation is not supported by this browser.");
   }
 
-  // Create a feature group to hold drawn items
+  // group to hold box
   drawnItems = new L.FeatureGroup();
   map.addLayer(drawnItems);
 
-  // Create a drawing handler for rectangles (without the full toolbar)
+  // We're not using the native buttons so...
   drawRectangle = new L.Draw.Rectangle(map, {
     shapeOptions: {
       color: "#ff0000",
@@ -264,14 +262,14 @@ function initializeMap() {
     },
   });
 
-  // Listen for the creation of a new rectangle
+  // Listen
   map.on(L.Draw.Event.CREATED, function (event) {
     const layer = event.layer;
-    // Clear any previous drawings
+    // Clear any old boxes
     drawnItems.clearLayers();
     drawnItems.addLayer(layer);
 
-    // Extract bounds from the drawn rectangle
+    // Extract bounds
     const bounds = layer.getBounds();
     if (
       Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) > 1 ||
@@ -299,22 +297,21 @@ function initializeMap() {
 // ================================
 
 function initializeSidebarButtons() {
-  // Zoom In
+  // Zoom
   elements.zoomIn.addEventListener("click", () => {
     map.zoomIn();
   });
 
-  // Zoom Out
   elements.zoomOut.addEventListener("click", () => {
     map.zoomOut();
   });
 
-  // Draw Rectangle – triggers the draw handler
+  // trigger draw handler
   elements.drawRect.addEventListener("click", () => {
     drawRectangle.enable();
   });
 
-  // Discard Draw – clears any drawn layers and resets state
+  // clears any drawn layers and resets state
   elements.discardDraw.addEventListener("click", () => {
     drawnItems.clearLayers();
     updateStatus("Please draw a box on the map!");

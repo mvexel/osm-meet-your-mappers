@@ -32,12 +32,10 @@ th:hover {
   display: flex;
   flex-direction: column;
   width: 200px;
-  /* All buttons will have this fixed width */
   gap: 1rem;
   margin-right: 1rem;
 }
 
-/* Simple button animations */
 .sidebar button {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -58,20 +56,19 @@ th:hover {
   /* height: 150px; */
   border-radius: 4px;
   font-weight: bold;
-  background-color: #e0f7fa; /* light background */
-  color: #00796b; /* contrasting text color */
+  background-color: #e0f7fa;
+  color: #00796b;
   text-align: center;
   transition: background-color 0.3s ease, transform 0.3s ease;
 }
 
-/* When the status updates, add the 'flash' class to draw attention */
 .status-message.flash {
   animation: flashAnim 1s ease;
 }
 
 @keyframes flashAnim {
   0% {
-    background-color: #ffeb3b; /* bright yellow flash */
+    background-color: #ffeb3b;
     transform: scale(1.05);
   }
   50% {

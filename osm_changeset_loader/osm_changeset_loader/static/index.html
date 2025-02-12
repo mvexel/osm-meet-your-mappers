@@ -5,10 +5,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Meet Your Mappers</title>
-    <!-- Leaflet and Leaflet.draw CSS -->
     <link rel="stylesheet" href="/static/leaflet.css" />
     <link rel="stylesheet" href="/static/leaflet.draw.css" />
-    <!-- Your custom CSS -->
     <link rel="stylesheet" href="/static/pico.green.min.css" />
     <link rel="stylesheet" href="/static/style.css">
     <style>
@@ -22,9 +20,11 @@
             <p>Draw an area and meet your mappers!</p>
             <p><small><a href="/static/about.html">About this website + help</a></small></p>
         </hgroup>
-        <!-- Container for sidebar and map -->
+
+        <!-- Status message box -->
         <div class="status-message" role="status"></div>
 
+        <!-- Container for sidebar and map -->
         <div id="mapContainer">
 
             <div class="sidebar">
@@ -34,26 +34,35 @@
                 <button id="drawRect">Draw Rectangle</button>
                 <button id="discardDraw">Start Over</button>
                 <button id="meetMappers" class="submit-button contrast" disabled>Meet My Mappers</button>
+
+                <!-- "Progress bar" -->
                 <div class="progress-indicator" role="progressbar" aria-hidden="true" style="visibility: hidden;">
                     <progress></progress>
                 </div>
             </div>
+
             <!-- Map element -->
             <div id="map"></div>
         </div>
 
+        <!-- Space for the table to go -->
         <div id="results"></div>
+
+        <!-- Export button for CSV -->
         <div id="export-container" style="display: none;">
             <button class="export-csv-button">Export to CSV</button>
         </div>
     </main>
 
     <!-- JavaScript dependencies -->
+    <!-- Leaflet -->
     <script src="/static/leaflet.js"></script>
     <script src="/static/leaflet.draw.js"></script>
+    <!-- TableSort -->
     <script src="/static/tablesort.min.js"></script>
     <script src="/static/tablesort.date.min.js"></script>
     <script src="/static/tablesort.number.min.js"></script>
+    <!-- My own stuff -->
     <script src="/static/script.js"></script>
 </body>
 
