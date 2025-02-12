@@ -5,11 +5,11 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    DB_HOST: str = os.getenv("DB_HOST", "localhost")
-    DB_PORT: str = os.getenv("DB_PORT", "5432")
-    DB_USER: str = os.getenv("DB_USER", "mvexel")
-    DB_PASS: str = os.getenv("DB_PASS", "")  # empty password by default
-    DB_NAME: str = os.getenv("DB_NAME", "changesets2")
+    DB_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
+    DB_PORT: str = os.getenv("POSTGRES_PORT", "5432")
+    DB_USER: str = os.getenv("POSTGRES_USER", "osm_user")
+    DB_PASS: str = os.getenv("POSTGRES_PASSWORD", "osm_pass")
+    DB_NAME: str = os.getenv("POSTGRES_DB", "osm_db")
 
     @property
     def DB_URL(self) -> str:
