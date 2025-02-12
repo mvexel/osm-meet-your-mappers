@@ -14,6 +14,7 @@ import yaml
 from lxml import etree
 from osm_meet_your_mappers.db import create_engine  # your engine setup
 from osm_meet_your_mappers.model import Changeset, Metadata
+from osm_meet_your_mappers.config import Config
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker  # type: ignore
 from sqlalchemy.pool import QueuePool
@@ -22,6 +23,8 @@ from archive_loader import insert_batch
 # Global locks to serialize duplicate checking/insertion and metadata updates.
 insert_lock = threading.Lock()
 metadata_lock = threading.Lock()
+
+config = Config()
 
 
 def model_to_dict(instance) -> dict:
@@ -265,41 +268,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Continuously backfill the changeset database from OSM replication files (backwards replication) using multithreading, updating metadata state with the oldest changeset timestamp."
     )
-    parser.add_argument(
-        "db_url", help="SQLAlchemy database URL (e.g. postgresql://user:pass@host/db)"
-    )
-    parser.add_argument(
-        "--min-seq",
-        type=int,
-        default=0,
-        help="Minimum replication sequence number to stop backfilling (default: 0)",
-    )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=50000,
-        help="Batch size for bulk inserts (default: 50000)",
-    )
-    parser.add_argument(
-        "--block-size",
-        type=int,
-        default=10,
-        help="Number of replication files to process concurrently (default: 10)",
-    )
-    parser.add_argument(
-        "--sleep-time",
-        type=int,
-        default=300,
-        help="Time (in seconds) to sleep when no new work is found (default: 300 seconds)",
-    )
-    args = parser.parse_args()
 
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
     )
 
     engine = create_engine(
-        args.db_url,
+        config.DB_URL,
         poolclass=QueuePool,
         pool_size=10,
         max_overflow=20,
@@ -314,15 +289,17 @@ def main() -> None:
             current_seq = get_current_sequence()
         except Exception as e:
             logging.error(f"Failed to fetch current replication sequence: {e}")
-            time.sleep(args.sleep_time)
+            time.sleep(config.SLEEP_TIME)
             continue
 
         work_done_overall = False
         seq = current_seq
         # Process replication files in descending order until we reach --min-seq.
-        while seq > args.min_seq:
+        while seq > config.MIN_SEQ:
             # Build a block of sequence numbers (in descending order).
-            block = list(range(seq, max(args.min_seq, seq - args.block_size) - 1, -1))
+            block = list(
+                range(seq, max(config.MIN_SEQ, seq - config.BLOCK_SIZE) - 1, -1)
+            )
             if not block:
                 break
 
@@ -334,13 +311,13 @@ def main() -> None:
                         s, req_session, retries=3, initial_delay=2.0
                     )
                     return process_replication_content(
-                        xml_bytes, SessionMaker, args.batch_size
+                        xml_bytes, SessionMaker, config.BATCH_SIZE
                     )
                 except Exception as e:
                     logging.error(f"Failed to process sequence {s}: {e}")
                     return True, None
 
-            with ThreadPoolExecutor(max_workers=args.block_size) as executor:
+            with ThreadPoolExecutor(max_workers=config.BLOCK_SIZE) as executor:
                 futures = {executor.submit(process_single_file, s): s for s in block}
                 for future in as_completed(futures):
                     s = futures[future]
@@ -368,9 +345,9 @@ def main() -> None:
 
         if not work_done_overall:
             logging.info(
-                f"No new replication work found. Sleeping for {args.sleep_time} seconds..."
+                f"No new replication work found. Sleeping for {config.SLEEP_TIME} seconds..."
             )
-            time.sleep(args.sleep_time)
+            time.sleep(config.SLEEP_TIME)
         else:
             logging.info(
                 "Finished processing current backfill block. Checking for more work shortly..."
