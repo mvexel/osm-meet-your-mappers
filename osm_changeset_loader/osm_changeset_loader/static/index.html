@@ -4,65 +4,53 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light dark">
+    <title>Meet Your Mappers</title>
+    <!-- Leaflet and Leaflet.draw CSS -->
+    <link rel="stylesheet" href="/static/leaflet.css" />
+    <link rel="stylesheet" href="/static/leaflet.draw.css" />
+    <!-- Your custom CSS -->
     <link rel="stylesheet" href="/static/pico.green.min.css" />
     <link rel="stylesheet" href="/static/style.css">
-    <title>Meet Your Mappers</title>
+    <style>
+    </style>
 </head>
 
 <body>
     <main class="container">
         <hgroup>
-            <h1>Meet Your Mappers!
-            </h1>
-            <p>Find out who has been mapping in your (or any) area!</p>
+            <h1>Meet Your Mappers!</h1>
+            <p>Draw an area and meet your mappers!</p>
+            <p><small><a href="/static/about.html">About this website + help</a></small></p>
         </hgroup>
-        <div class="grid">
-            <div>
-                <article>
-                    <form>
-                        <fieldset>
-                            <label>OpenStreetMap URL</label>
-                            <input name="osm_url" class="osm-url-input" placeholder="Paste here">
-                            <label>
-                                Select the scale you are interested in:
-                            </label>
-                            <fieldset class="area-select">
-                                <input type="radio" name="area_size" value="neighborhood" checked>
-                                <label><span data-tooltip="Approximately 5km2">Neighborhood</span></label>
-                                <input type="radio" name="area_size" value="city">
-                                <label><span data-tooltip="Approximately 25km2">City</span></label>
-                                <input type="radio" name="area_size" value="region">
-                                <label><span data-tooltip="Approximately 250km2">Region</span></label>
-                            </fieldset>
-                        </fieldset>
-                        <button type="submit" class="submit-button">Meet My Mappers</button>
-                        <div class="status-message" role="status"></div>
-                        <div class="progress-indicator" role="progressbar" aria-hidden="true" style="display: none;">
-                            <progress></progress>
-                        </div>
-                    </form>
-                </article>
+        <!-- Container for sidebar and map -->
+        <div class="status-message" role="status"></div>
+
+        <div id="mapContainer">
+
+            <div class="sidebar">
+                <!-- Control buttons -->
+                <button class="secondary" id="zoomIn">Zoom In</button>
+                <button class="secondary" id="zoomOut">Zoom Out</button>
+                <button id="drawRect">Draw Rectangle</button>
+                <button id="discardDraw">Start Over</button>
+                <button id="meetMappers" class="submit-button contrast" disabled>Meet My Mappers</button>
+                <div class="progress-indicator" role="progressbar" aria-hidden="true" style="visibility: hidden;">
+                    <progress></progress>
+                </div>
             </div>
-            <div>
-                <article>
-                    <h4>Instructions</h4>
-                    <ul>
-                        <li>Go to OSM and center the map on the area you are interested in</li>
-                        <li>Copy the URL (<code>https://www.openstreetmap.org/#map=...</code>)</li>
-                        <li>Paste the URL in the form on this page</li>
-                        <li>Select the scale of the region you are interested in</li>
-                        <li>Click on <code>Meet My Mappers</code></li>
-                        <li>After about 10 seconds, you will see a table with active mappers in your area!</li>
-                    </ul>
-                </article>
-            </div>
+            <!-- Map element -->
+            <div id="map"></div>
         </div>
+
         <div id="results"></div>
         <div id="export-container" style="display: none;">
             <button class="export-csv-button">Export to CSV</button>
         </div>
     </main>
+
+    <!-- JavaScript dependencies -->
+    <script src="/static/leaflet.js"></script>
+    <script src="/static/leaflet.draw.js"></script>
     <script src="/static/tablesort.min.js"></script>
     <script src="/static/tablesort.date.min.js"></script>
     <script src="/static/tablesort.number.min.js"></script>

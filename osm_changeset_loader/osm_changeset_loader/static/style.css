@@ -20,5 +20,66 @@ th:hover {
 }
 
 #map {
+  flex: 1;
   min-height: 400px;
+}
+
+#mapContainer {
+  display: flex;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 200px;
+  /* All buttons will have this fixed width */
+  gap: 1rem;
+  margin-right: 1rem;
+}
+
+/* Simple button animations */
+.sidebar button {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sidebar button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar button:active {
+  transform: scale(0.95);
+}
+
+.status-message {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  /* height: 150px; */
+  border-radius: 4px;
+  font-weight: bold;
+  background-color: #e0f7fa; /* light background */
+  color: #00796b; /* contrasting text color */
+  text-align: center;
+  transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+/* When the status updates, add the 'flash' class to draw attention */
+.status-message.flash {
+  animation: flashAnim 1s ease;
+}
+
+@keyframes flashAnim {
+  0% {
+    background-color: #ffeb3b; /* bright yellow flash */
+    transform: scale(1.05);
+  }
+  50% {
+    background-color: #fffde7;
+    transform: scale(1);
+  }
+  100% {
+    background-color: #e0f7fa;
+    transform: scale(1);
+  }
 }

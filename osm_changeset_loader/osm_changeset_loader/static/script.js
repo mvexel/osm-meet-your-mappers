@@ -1,199 +1,359 @@
+// ================================
+// Constants and State Management
+// ================================
+
+const CONFIG = {
+  DATE_SORT_DEFAULT: true,
+  MAX_TABLE_ROWS: 100,
+};
+
+const state = {
+  currentBbox: null,
+  currentData: null,
+};
+
+// ================================
 // DOM Elements
-const form = document.querySelector("form");
-const log = document.querySelector("#log");
-const osmUrlInput = document.querySelector(".osm-url-input");
-const areaSelect = document.querySelector(".area-select");
-const statusEl = document.querySelector(".status-message");
-const submitButton = document.querySelector(".submit-button");
-const progressBar = document.querySelector(".progress-indicator");
-const resultsDiv = document.querySelector("#results");
-const exportContainer = document.querySelector("#export-container");
-const exportButton = document.querySelector(".export-csv-button");
+// ================================
 
-// box sizes
-const neighborhoodSqKm = 5;
-const cityKm2 = 25;
-const regionKm2 = 250;
+const elements = {
+  status: document.querySelector(".status-message"),
+  meetMappers: document.getElementById("meetMappers"),
+  progress: document.querySelector(".progress-indicator"),
+  results: document.getElementById("results"),
+  export: {
+    container: document.getElementById("export-container"),
+    button: document.querySelector(".export-csv-button"),
+  },
+  // Sidebar buttons
+  zoomIn: document.getElementById("zoomIn"),
+  zoomOut: document.getElementById("zoomOut"),
+  drawRect: document.getElementById("drawRect"),
+  discardDraw: document.getElementById("discardDraw"),
+};
 
-let currentBbox = null;
-let currentData = null; // Store the current data for export
+// ================================
+// Utility Functions
+// ================================
 
-// Add export button click handler
-exportButton.addEventListener("click", exportToCsv);
+const utils = {
+  formatCoordinate: (num) => num.toFixed(4),
 
-function exportToCsv() {
-  if (!currentData) return;
+  createBboxString: (bbox) => {
+    const { minLon, minLat, maxLon, maxLat } = bbox;
+    return `[${utils.formatCoordinate(minLon)}, ${utils.formatCoordinate(
+      minLat
+    )}] to [${utils.formatCoordinate(maxLon)}, ${utils.formatCoordinate(
+      maxLat
+    )}]`;
+  },
+};
 
-  const headers = ["user", "changeset_count", "first_change", "last_change"];
-  const csvContent = [
-    headers.join(","),
-    ...currentData.map((row) =>
-      [
-        `"${row.user}"`,
-        row.changeset_count,
-        new Date(row.first_change).toISOString(),
-        new Date(row.last_change).toISOString(),
-      ].join(",")
-    ),
-  ].join("\n");
+// Helper function to return friendly date strings
+function friendlyDate(date) {
+  const now = new Date();
+  const oneDay = 24 * 60 * 60 * 1000;
+  const optionsTime = { hour: "2-digit", minute: "2-digit" };
 
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.setAttribute("href", url);
-  link.setAttribute("download", "osm_mappers_export.csv");
-  link.style.visibility = "hidden";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  // If the date is today, compare their date strings
+  if (now.toDateString() === date.toDateString()) {
+    return `Today at ${date.toLocaleTimeString(undefined, optionsTime)}`;
+  }
+  // Check if the date is yesterday by subtracting one day
+  const yesterday = new Date(now.getTime() - oneDay);
+  if (yesterday.toDateString() === date.toDateString()) {
+    return `Yesterday at ${date.toLocaleTimeString(undefined, optionsTime)}`;
+  }
+  // Otherwise, return a standard formatted date and time
+  return (
+    date.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }) +
+    " " +
+    date.toLocaleTimeString(undefined, optionsTime)
+  );
 }
 
-// Event Listeners
-form.addEventListener("submit", handleFormSubmit);
+function updateStatus(message) {
+  elements.status.textContent = message;
+  elements.status.classList.add("flash");
+  setTimeout(() => elements.status.classList.remove("flash"), 1000);
+}
 
-async function handleFormSubmit(event) {
-  event.preventDefault();
+// ================================
+// UI Handling
+// ================================
 
-  const formData = new FormData(form);
-  const osmUrl = formData.get("osm_url");
-  const areaType = formData.get("area_size");
+const ui = {
+  showLoader: () => {
+    elements.meetMappers.disabled = true;
+    elements.progress.style.visibility = "visible";
+    elements.progress.setAttribute("aria-hidden", "false");
+    elements.status.innerHTML = '<span class="loader"></span> Loading data...';
+  },
 
-  if (!validateOsmUrl(osmUrl)) {
-    osmUrlInput.ariaInvalid = true;
+  hideLoader: () => {
+    elements.meetMappers.disabled = false;
+    elements.progress.style.visibility = "hidden";
+    elements.progress.setAttribute("aria-hidden", "true");
+  },
+};
+
+// ================================
+// Data Handling Functions
+// ================================
+
+const dataHandler = {
+  async fetchMappers(bbox) {
+    const params = new URLSearchParams({
+      min_lon: bbox.minLon,
+      max_lon: bbox.maxLon,
+      min_lat: bbox.minLat,
+      max_lat: bbox.maxLat,
+    });
+    const response = await fetch(`/mappers/?${params}`);
+    return response.json();
+  },
+
+  displayMappers(data) {
+    state.currentData = data;
+    elements.export.container.style.display = data.length ? "block" : "none";
+
+    const columns = [
+      { key: "user", label: "User", type: "string" },
+      { key: "changeset_count", label: "Changeset Count", type: "number" },
+      { key: "first_change", label: "First Change", type: "date" },
+      { key: "last_change", label: "Last Change", type: "date" },
+    ];
+
+    const table = document.createElement("table");
+    const thead = document.createElement("thead");
+    const tbody = document.createElement("tbody");
+
+    // Create table header
+    const headerRow = document.createElement("tr");
+    columns.forEach((col) => {
+      const th = document.createElement("th");
+      th.textContent = col.label;
+      if (col.key === "changeset_count") {
+        th.dataset.sortMethod = "number";
+        th.dataset.sortDefault = "";
+      }
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+
+    // Create table body
+    const maxRows = CONFIG.MAX_TABLE_ROWS;
+    data.slice(0, maxRows).forEach((item) => {
+      const row = document.createElement("tr");
+      columns.forEach((col) => {
+        const td = document.createElement("td");
+        const value = item[col.key];
+
+        if (col.key === "user") {
+          // Create a link to the OSM user page
+          const link = document.createElement("a");
+          link.href = `https://www.openstreetmap.org/user/${value}`;
+          link.textContent = value;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          td.appendChild(link);
+        } else if (col.type === "date") {
+          const date = new Date(value);
+          td.textContent = friendlyDate(date);
+          td.dataset.sort = date.getTime();
+        } else {
+          td.textContent = value;
+        }
+        row.appendChild(td);
+      });
+      tbody.appendChild(row);
+    });
+
+    table.appendChild(thead);
+    table.appendChild(tbody);
+
+    elements.results.innerHTML = "";
+    elements.results.appendChild(table);
+
+    if (data.length > maxRows) {
+      const notice = document.createElement("div");
+      notice.textContent = `Showing only the first ${maxRows} of ${data.length} rows. Download the CSV file to see all mappers!`;
+      elements.results.appendChild(notice);
+    }
+
+    new Tablesort(table, { descending: CONFIG.DATE_SORT_DEFAULT });
+  },
+
+  exportToCsv() {
+    if (!state.currentData) return;
+    const headers = ["user", "changeset_count", "first_change", "last_change"];
+    const csvContent = [
+      headers.join(","),
+      ...state.currentData.map((row) =>
+        [
+          `"${row.user}"`,
+          row.changeset_count,
+          new Date(row.first_change).toISOString(),
+          new Date(row.last_change).toISOString(),
+        ].join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "osm_mappers_export.csv";
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  },
+};
+
+// ================================
+// Map & Drawing Integration
+// ================================
+
+let map, drawnItems, drawRectangle; // drawRectangle will be our drawing handler
+
+function initializeMap() {
+  // Create the map with a default center and zoom level (in case geolocation fails)
+  map = L.map("map", { zoomControl: false }).setView([51.505, -0.09], 13);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors",
+  }).addTo(map);
+
+  // Attempt to use geolocation to pan the map to the user's location
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        // Pan the map to the user's location
+        map.setView([lat, lon], 10);
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 5000,
+        maximumAge: 0,
+      }
+    );
+  } else {
+    console.log("Geolocation is not supported by this browser.");
+  }
+
+  // Create a feature group to hold drawn items
+  drawnItems = new L.FeatureGroup();
+  map.addLayer(drawnItems);
+
+  // Create a drawing handler for rectangles (without the full toolbar)
+  drawRectangle = new L.Draw.Rectangle(map, {
+    shapeOptions: {
+      color: "#ff0000",
+      weight: 2,
+    },
+  });
+
+  // Listen for the creation of a new rectangle
+  map.on(L.Draw.Event.CREATED, function (event) {
+    const layer = event.layer;
+    // Clear any previous drawings
+    drawnItems.clearLayers();
+    drawnItems.addLayer(layer);
+
+    // Extract bounds from the drawn rectangle
+    const bounds = layer.getBounds();
+    if (
+      Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) > 1 ||
+      Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) > 1
+    ) {
+      state.currentBbox = null;
+      drawnItems.clearLayers();
+      updateStatus("Box is too huge, try something smaller.");
+    } else {
+      state.currentBbox = {
+        minLat: bounds.getSouthWest().lat,
+        minLon: bounds.getSouthWest().lng,
+        maxLat: bounds.getNorthEast().lat,
+        maxLon: bounds.getNorthEast().lng,
+      };
+
+      elements.meetMappers.disabled = false;
+      updateStatus("Bounding box OK!");
+    }
+  });
+}
+
+// ================================
+// Sidebar Button Event Handlers
+// ================================
+
+function initializeSidebarButtons() {
+  // Zoom In
+  elements.zoomIn.addEventListener("click", () => {
+    map.zoomIn();
+  });
+
+  // Zoom Out
+  elements.zoomOut.addEventListener("click", () => {
+    map.zoomOut();
+  });
+
+  // Draw Rectangle – triggers the draw handler
+  elements.drawRect.addEventListener("click", () => {
+    drawRectangle.enable();
+  });
+
+  // Discard Draw – clears any drawn layers and resets state
+  elements.discardDraw.addEventListener("click", () => {
+    drawnItems.clearLayers();
+    updateStatus("Please draw a box on the map!");
+    state.currentBbox = null;
+    elements.meetMappers.disabled = true;
+  });
+}
+
+// ================================
+// "Meet My Mappers" Button Handler
+// ================================
+
+async function handleMeetMappers() {
+  if (!state.currentBbox) {
+    updateStatus("Please draw a rectangle on the map to select an area.");
     return;
   }
-  osmUrlInput.ariaInvalid = false;
 
+  ui.showLoader();
   try {
-    await fetchMappers(osmUrl, areaType);
+    const data = await dataHandler.fetchMappers(state.currentBbox);
+    updateStatus(`Success! Found ${data.length} mappers.`);
+    dataHandler.displayMappers(data);
   } catch (error) {
-    log.textContent = `Error: ${error.message}`;
-    console.error("Form submission error:", error);
-  }
-}
-
-// Validation and parsing functions
-function validateOsmUrl(osmUrl) {
-  return osmUrl.match(/#map=(\d+)\/(-?\d+\.\d+)\/(-?\d+\.\d+)/) !== null;
-}
-
-function osmUrlToCenter(osmUrl) {
-  const match = osmUrl.match(/#map=(\d+)\/(-?\d+\.\d+)\/(-?\d+\.\d+)/);
-  if (!match) {
-    throw new Error("Invalid OSM URL format");
-  }
-  return {
-    lat: parseFloat(match[2]),
-    lon: parseFloat(match[3]),
-  };
-}
-
-function computeBbox(center, areaType) {
-  if (!center || !areaType) {
-    throw new Error("Invalid center or area type");
-  }
-  let halfSideKm;
-  if (areaType === "neighborhood") {
-    halfSideKm = Math.sqrt(neighborhoodSqKm) / 2;
-  } else if (areaType === "city") {
-    halfSideKm = Math.sqrt(cityKm2) / 2;
-  } else if (areaType === "region") {
-    halfSideKm = Math.sqrt(regionKm2) / 2;
-  } else {
-    halfSideKm = 0.5;
-  }
-  // approximate sqkm calculation
-  const latOffset = halfSideKm / 111;
-  const lonOffset = halfSideKm / (111 * Math.cos((center.lat * Math.PI) / 180));
-  return {
-    minLat: center.lat - latOffset,
-    maxLat: center.lat + latOffset,
-    minLon: center.lon - lonOffset,
-    maxLon: center.lon + lonOffset,
-  };
-}
-
-// Render a sortable table using Tablesort.
-function displayMappers(data) {
-  currentData = data; // Store the data for export
-  // data.sort((a, b) => new Date(b.last_change) - new Date(a.last_change));
-  data.sort(data.changeset_count);
-
-  resultsDiv.innerHTML = "";
-  exportContainer.style.display = data.length > 0 ? "block" : "none";
-
-  const table = document.createElement("table");
-
-  // Define the columns with explicit types.
-  const columns = [
-    { key: "user", label: "User", type: "string" },
-    { key: "changeset_count", label: "Changeset Count", type: "number" },
-    { key: "first_change", label: "First Change", type: "date" },
-    { key: "last_change", label: "Last Change", type: "date" },
-  ];
-
-  // Build the table header.
-  const thead = document.createElement("thead");
-  const headerRow = document.createElement("tr");
-  columns.forEach((col) => {
-    const th = document.createElement("th");
-    th.textContent = col.label;
-    if (col.key === "changeset_count") {
-      th.setAttribute("data-sort-method", "number");
-      th.setAttribute("data-sort-default", "");
-    }
-    headerRow.appendChild(th);
-  });
-  thead.appendChild(headerRow);
-  table.appendChild(thead);
-
-  // Build the table body.
-  const tbody = document.createElement("tbody");
-  data.forEach((item) => {
-    const tr = document.createElement("tr");
-    columns.forEach((col) => {
-      const td = document.createElement("td");
-      let value = item[col.key];
-      if (col.type === "date") {
-        const dateObj = new Date(value);
-        td.textContent = dateObj.toLocaleString();
-        td.setAttribute("data-sort", dateObj.getTime());
-      } else {
-        td.textContent = value;
-      }
-      tr.appendChild(td);
-    });
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
-  resultsDiv.appendChild(table);
-
-  // Initialize Tablesort on the table.
-  new Tablesort(table, { descending: true });
-}
-
-async function fetchMappers(osmUrl, areaType) {
-  submitButton.disabled = true;
-  progressBar.style.display = "block";
-  progressBar.setAttribute("aria-hidden", "false");
-  statusEl.innerHTML = '<span class="loader"></span> Loading data...';
-
-  try {
-    const center = osmUrlToCenter(osmUrl);
-    currentBbox = computeBbox(center, areaType);
-
-    const response = await fetch(
-      `/mappers/?min_lon=${currentBbox.minLon}&max_lon=${currentBbox.maxLon}&min_lat=${currentBbox.minLat}&max_lat=${currentBbox.maxLat}`
-    );
-    const data = await response.json();
-    statusEl.textContent = `Success! Found ${data.length} mappers`;
-    displayMappers(data);
-  } catch (error) {
-    console.error("Error fetching mapper data:", error);
-    statusEl.textContent = "Error fetching mapper data. Please try again.";
+    console.error("Error:", error);
+    updateStatus(`Error: ${error.message}`);
   } finally {
-    submitButton.disabled = false;
-    progressBar.style.display = "none";
-    progressBar.setAttribute("aria-hidden", "true");
+    ui.hideLoader();
   }
 }
+
+// ================================
+// Initialization on DOM Ready
+// ================================
+
+document.addEventListener("DOMContentLoaded", () => {
+  initializeMap();
+  initializeSidebarButtons();
+  elements.meetMappers.addEventListener("click", handleMeetMappers);
+  elements.export.button.addEventListener("click", dataHandler.exportToCsv);
+  updateStatus("Welcome!");
+});
