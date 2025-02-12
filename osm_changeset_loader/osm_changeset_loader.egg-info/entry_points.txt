@@ -1,4 +1,0 @@
-[console_scripts]
-osm-changeset-catchup = catch_up.py:main
-osm-changeset-loader = osm_changeset_loader.api:main
-osm-changeset-rebuild-db = osm_changeset_loader.db:rebuild_database
