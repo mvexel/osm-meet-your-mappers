@@ -62,3 +62,20 @@ services:
       BLOCK_SIZE: 10
       SLEEP_TIME: 300
     command: ["python", "-u", "scripts/backfill.py"]
+
+  # The archive loader service
+  archive_loader:
+    build: .
+    container_name: osm_mappers_archive_loader
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: osm_user
+      POSTGRES_PASSWORD: osm_pass
+      POSTGRES_DB: osm_db
+    volumes:
+      - ./data:/data
+    entrypoint: ["/app/scripts/archive_loader_entrypoint.sh"]
