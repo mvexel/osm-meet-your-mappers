@@ -259,6 +259,16 @@ def main():
         format="%(asctime)s %(levelname)s: %(message)s",
     )
 
+    # Configure the engine with a connection pool.
+    engine = create_engine(
+        args.db_url,
+        poolclass=QueuePool,
+        pool_size=POOL_SIZE,
+        max_overflow=20,
+        pool_timeout=30,
+        pool_pre_ping=True,
+    )
+
     if args.truncate:
         # Check if tables exist before truncating
         with engine.connect() as conn:
@@ -281,15 +291,6 @@ def main():
     )
     to_date = datetime.strptime(args.to_date, "%Y%m%d").date() if args.to_date else None
 
-    # Configure the engine with a connection pool.
-    engine = create_engine(
-        args.db_url,
-        poolclass=QueuePool,
-        pool_size=POOL_SIZE,
-        max_overflow=20,
-        pool_timeout=30,
-        pool_pre_ping=True,
-    )
     Session = sessionmaker(bind=engine)
 
     logging.info(
