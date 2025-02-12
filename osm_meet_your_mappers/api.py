@@ -225,7 +225,10 @@ async def get_metadata():
         db.close()
 
 
-if __name__ == "__main__":
+def main():
+    """CLI entry point that starts the uvicorn server"""
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+if __name__ == "__main__":
+    main()
