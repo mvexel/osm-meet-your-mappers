@@ -9,15 +9,20 @@ from sqlalchemy_utils import database_exists, drop_database, create_database
 from .model import Changeset, ChangesetComment, ChangesetTag, Metadata, Base
 from osm_meet_your_mappers.config import Config
 
+config = Config()
 
-def get_db_engine(db_url=Config.DB_URL):
+def get_db_engine(db_url=None):
+    if db_url is None:
+        db_url = config.DB_URL
     """
     Get a database engine.
     """
     return create_engine(db_url)
 
 
-def get_db_session(db_url=Config.DB_URL):
+def get_db_session(db_url=None):
+    if db_url is None:
+        db_url = config.DB_URL
     """
     Get a database session.
     """
@@ -25,7 +30,9 @@ def get_db_session(db_url=Config.DB_URL):
     return Session(engine)
 
 
-def create_tables(db_url=Config.DB_URL):
+def create_tables(db_url=None):
+    if db_url is None:
+        db_url = config.DB_URL
     """
     Create database tables.
     """
