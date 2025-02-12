@@ -10,6 +10,8 @@ fi
 # Construct the database URL
 DB_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
 
+echo DB_URL
+
 # Run the archive loader with the provided arguments
 python /app/scripts/archive_loader.py "/data/$1" "$DB_URL" "${@:2}"
 
