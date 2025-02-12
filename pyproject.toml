@@ -39,4 +39,4 @@ osm-meet-your-mappers-catchup = "catch_up.py:main"
 osm-meet-your-mappers-rebuild-db = "osm_meet_your_mappers.db:rebuild_database"
 
 [tool.setuptools.packages.find]
-where = ["osm_meet_your_mappers"]
+where = ["."]
