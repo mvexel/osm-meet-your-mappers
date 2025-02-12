@@ -231,6 +231,7 @@ def ensure_database_exists(db_url):
     """
     url = make_url(db_url)
     target_db = url.database
+    logging.info(f"Target database: {target_db}")
 
     # Change to the default database (commonly 'postgres')
     default_url = url.set(database="postgres")
@@ -245,7 +246,6 @@ def ensure_database_exists(db_url):
         exists = result.scalar() is not None
         if not exists:
             conn.execute(text(f'CREATE DATABASE "{target_db}"'))
-            conn.execute(text("CREATE EXTENSION POSTGIS"))
             logging.info(f"Database '{target_db}' created.")
         else:
             logging.info(f"Database '{target_db}' already exists.")
