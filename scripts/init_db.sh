@@ -7,11 +7,4 @@ until PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER"
   sleep 1
 done
 
-# Enable PostGIS extension (if not already enabled)
-PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS postgis;"
-echo "PostGIS extension enabled."
-
-# Note: Migrations are now handled by the separate migration container.
-echo "Skipping Alembic migrations in init_db.sh - they are handled by the migrate container."
-
-echo "Initialization complete."
+echo "Database connection confirmed."
