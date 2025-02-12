@@ -61,4 +61,4 @@ services:
       BATCH_SIZE: 50000
       BLOCK_SIZE: 10
       SLEEP_TIME: 300
-    command: ["python", "scripts/backfill.py"]
+    command: ["python", "-u", "scripts/backfill.py"]
