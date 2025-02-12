@@ -91,8 +91,10 @@ def get_mapper_statistics(
     min_lat: float,
     max_lat: float,
     min_changesets: int,
-    db_url=Config.DB_URL,
+    db_url=None,
 ):
+    if db_url is None:
+        db_url = Config().DB_URL
     """
     Get mapper statistics within a bounding box.
     Only counts changesets whose bounding boxes are completely contained within
@@ -139,7 +141,9 @@ def init_database(db_url=None):
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
         conn.commit()
 
-def rebuild_database(db_url=Config.DB_URL):
+def rebuild_database(db_url=None):
+    if db_url is None:
+        db_url = Config().DB_URL
     """
     Drop and recreate the entire database, then create all tables.
 
