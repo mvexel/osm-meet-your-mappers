@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+import datetime
 from typing import Any, List, Optional, Set, Tuple
 
 import requests
@@ -63,7 +63,7 @@ def download_and_decompress(url: str, req_session: requests.Session) -> bytes:
     """
     Download a gzipped file from the given URL and return its decompressed bytes.
     """
-    logging.info(f"Downloading {url}")
+    logging.debug(f"Downloading {url}")
     response = req_session.get(url)
     response.raise_for_status()
     return gzip.decompress(response.content)
@@ -106,7 +106,7 @@ def get_current_sequence(
     response.raise_for_status()
     state = yaml.safe_load(response.text)
     sequence = int(state["sequence"])
-    logging.info(f"Current replication state sequence: {sequence}")
+    logging.debug(f"Current replication state sequence: {sequence}")
     return sequence
 
 
@@ -130,7 +130,7 @@ def get_duplicate_ids(SessionMaker: Any, cs_list: List[dict]) -> Set[int]:
 
 def process_replication_content(
     xml_bytes: bytes, SessionMaker: Any, batch_size: int
-) -> Tuple[bool, Optional[datetime]]:
+) -> Tuple[bool, Optional[datetime.datetime]]:
     """
     Process the XML content (bytes) of a replication file using a streaming parser.
 
@@ -147,7 +147,7 @@ def process_replication_content(
     comment_batch: List[dict] = []
     processed = 0
     new_changesets_in_file = 0
-    min_new_ts: Optional[datetime] = None
+    min_new_ts: Optional[datetime.datetime] = None
 
     stream = io.BytesIO(xml_bytes)
     context = etree.iterparse(stream, events=("end",), tag="changeset")
@@ -180,7 +180,7 @@ def process_replication_content(
                             min_new_ts = batch_min
                         new_count = len(new_cs_batch)
                         new_changesets_in_file += new_count
-                        logging.info(
+                        logging.debug(
                             f"Inserting batch of {new_count} new changesets (from {len(cs_batch)} closed changesets)"
                         )
                         insert_batch(
@@ -218,14 +218,14 @@ def process_replication_content(
                 insert_batch(
                     SessionMaker, new_cs_batch, new_tag_batch, new_comment_batch
                 )
-    logging.info(
+    logging.debug(
         f"Finished processing replication file: {processed} closed changesets parsed. New changesets: {new_changesets_in_file}"
     )
     file_empty = new_changesets_in_file == 0
     return file_empty, min_new_ts
 
 
-def update_metadata_state(new_ts: datetime, SessionMaker: Any) -> None:
+def update_metadata_state(new_ts: datetime.datetime, SessionMaker: Any) -> None:
     """
     Update the Metadata table (row with id==1) so that its state field reflects the oldest changeset timestamp.
     For backwards replication, update only if the new timestamp is older than the current state.
@@ -235,15 +235,15 @@ def update_metadata_state(new_ts: datetime, SessionMaker: Any) -> None:
         session = SessionMaker()
         try:
             row = session.query(Metadata).filter(Metadata.id == 1).first()
-            now = datetime.utcnow()
+            now = datetime.datetime.now(datetime.UTC)
             if row is None:
                 # Explicitly set the id to 1 so that we update the same row in future calls.
                 row = Metadata(id=1, state=new_ts.isoformat(), timestamp=now)
                 session.add(row)
-                logging.info(f"Inserted metadata state: {new_ts.isoformat()}")
+                logging.debug(f"Inserted metadata state: {new_ts.isoformat()}")
             else:
                 try:
-                    current_state_ts = datetime.fromisoformat(row.state)
+                    current_state_ts = datetime.datetime.fromisoformat(row.state)
                 except Exception:
                     current_state_ts = None
                 # For backwards replication, update only if the new timestamp is older.
@@ -251,7 +251,7 @@ def update_metadata_state(new_ts: datetime, SessionMaker: Any) -> None:
                     old_state = row.state
                     row.state = new_ts.isoformat()
                     row.timestamp = now
-                    logging.info(
+                    logging.debug(
                         f"Updated metadata state from {old_state} to {new_ts.isoformat()}"
                     )
             session.commit()
@@ -273,10 +273,13 @@ def wait_for_db(engine, max_retries=30, delay=1):
                 conn.execute(select(1))
                 return True
         except Exception as e:
-            logging.warning(f"Database connection failed (attempt {retries + 1}/{max_retries}): {e}")
+            logging.warning(
+                f"Database connection failed (attempt {retries + 1}/{max_retries}): {e}"
+            )
             time.sleep(delay)
             retries += 1
     return False
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -295,7 +298,7 @@ def main() -> None:
         pool_timeout=30,
         pool_pre_ping=True,
     )
-    
+
     # Wait for database to become available
     if not wait_for_db(engine):
         logging.error("Failed to connect to database after multiple attempts. Exiting.")
@@ -325,7 +328,7 @@ def main() -> None:
 
             block_new_work = False
 
-            def process_single_file(s: int) -> Tuple[bool, Optional[datetime]]:
+            def process_single_file(s: int) -> Tuple[bool, Optional[datetime.datetime]]:
                 try:
                     xml_bytes = download_with_retry(
                         s, req_session, retries=3, initial_delay=2.0
