@@ -283,8 +283,8 @@ def main():
                 logging.warning("Truncating existing tables")
                 truncate_tables()
             else:
-                logging.error("Tables do not exist. Please ensure the database is initialized first.")
-                exit(1)
+                logging.warning("Tables do not exist - creating them")
+                create_tables()
 
     from_date = (
         datetime.strptime(args.from_date, "%Y%m%d").date() if args.from_date else None
