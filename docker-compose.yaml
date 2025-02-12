@@ -15,21 +15,20 @@ services:
     build: . # Uses your Dockerfile in the current directory
     container_name: osm_mappers_app
     depends_on:
-      - migrations
+      - db
     ports:
       - "8000:8000"
     environment:
-      # Environment variables the app might read in config.py
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: osm_user
-      DB_PASS: osm_pass
-      DB_NAME: osm_db
+      # Environment variables for database connection
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: osm_user
+      POSTGRES_PASSWORD: osm_pass
+      POSTGRES_DB: osm_db
+      # App configuration
       PORT: 8000
     command: >
-      osm-meet-your-mappers
-      --host 0.0.0.0
-      --port 8000
+      /bin/sh -c "/app/scripts/init_db.sh && osm-meet-your-mappers --host 0.0.0.0 --port 8000"
 
   # The continuous backfill script
   backfill:
@@ -38,33 +37,17 @@ services:
     depends_on:
       - db
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: osm_user
-      DB_PASS: osm_pass
-      DB_NAME: osm_db
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: osm_user
+      POSTGRES_PASSWORD: osm_pass
+      POSTGRES_DB: osm_db
       # You can also set optional override values for your script's CLI arguments if you want them dynamic
       MIN_SEQ: 0
       BATCH_SIZE: 50000
       BLOCK_SIZE: 10
       SLEEP_TIME: 300
     command: ["python", "scripts/backfill.py"]
-
-  # Migration service
-  migrations:
-    build: .
-    container_name: osm_mappers_migrations
-    depends_on:
-      - db
-    environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: osm_user
-      DB_PASS: osm_pass
-      DB_NAME: osm_db
-    command: ["alembic", "upgrade", "head"]
-    volumes:
-      - .:/app
 
 volumes:
   db_data:
