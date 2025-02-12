@@ -17,9 +17,10 @@ Then run the loader.
 
 
 ```bash
-docker compose run --build --remove-orphans -v /path/to/your/file:/data archive_loader discussions-latest.osm.bz2 --from_date 20200101
+> OSM_FILE_PATH=/your/path/to/discussions-250203.osm.bz2 LOADER_ARGS="--from_date=20200101" docker compose -f docker-compose.init.yaml up --build
 ```
 
+wait a while.... (hours)
 
 ## Run the app
 
