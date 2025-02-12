@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "osm-changeset-loader"
+name = "osm-meet-your-mappers"
 version = "1.0.0"
-description = "OpenStreetMap changeset loader and API"
+description = "Meet the OpenStreetMap mappers in your area"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
@@ -34,9 +34,9 @@ dependencies = [
 ]
 
 [project.scripts]
-osm-changeset-loader = "osm_changeset_loader.api:main"
-osm-changeset-catchup = "catch_up.py:main"
-osm-changeset-rebuild-db = "osm_changeset_loader.db:rebuild_database"
+osm-meet-your-mappers = "osm_meet_your_mappers.api:main"
+osm-meet-your-mappers-catchup = "catch_up.py:main"
+osm-meet-your-mappers-rebuild-db = "osm_meet_your_mappers.db:rebuild_database"
 
 [tool.setuptools.packages.find]
-where = ["osm_changeset_loader"]
+where = ["osm_meet_your_mappers"]

@@ -22,7 +22,7 @@ from .db import (
     query_changesets,
     get_mapper_statistics,
 )
-from .config import Config
+from osm_meet_your_mappers.config import Config
 
 
 class ChangesetResponse(BaseModel):

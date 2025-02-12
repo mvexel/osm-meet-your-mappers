@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, and_, func
 from sqlalchemy.orm import Session
 from sqlalchemy_utils import database_exists, drop_database, create_database
 from .model import Changeset, ChangesetComment, ChangesetTag, Metadata, Base
-from osm_changeset_loader.config import Config
+from osm_meet_your_mappers.config import Config
 
 
 def get_db_engine(db_url=Config.DB_URL):
