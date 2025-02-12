@@ -39,7 +39,7 @@ services:
       db:
         condition: service_healthy
       migrate:
-        condition: service_healthy
+        condition: service_completed_successfully
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -59,7 +59,7 @@ services:
       db:
         condition: service_healthy
       migrate:
-        condition: service_healthy
+        condition: service_completed_successfully
     ports:
       - "8000:8000"
     environment:
