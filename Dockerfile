@@ -36,8 +36,8 @@ COPY . .
 # Create a directory for alembic migrations
 RUN mkdir -p /app/alembic/versions
 
-# Make init script executable
-RUN chmod +x /app/scripts/init_db.sh
+# Make scripts executable
+RUN chmod +x /app/scripts/init_db.sh /app/scripts/init_phase.sh
 
 # Install the package in editable mode
 RUN pip install -e .
