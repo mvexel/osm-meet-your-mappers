@@ -10,15 +10,16 @@ from typing import Optional
 from lxml import etree
 from osm_meet_your_mappers.db import create_tables
 from osm_meet_your_mappers.model import Changeset, ChangesetComment, ChangesetTag
+from osm_meet_your_mappers.config import Config
 from shapely.geometry import box
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 from truncate_db import truncate_tables
 
-BATCH_SIZE = 50_000
 NUM_WORKERS = 4
-POOL_SIZE = 10  # database connection pool size
+
+config = Config()
 
 
 def valid_yyyymmdd(date_str):
@@ -155,7 +156,7 @@ def insert_batch(Session, cs_batch, tag_batch, comment_batch):
 
 
 def process_changeset_file(
-    filename, Session, from_date, to_date, batch_size=BATCH_SIZE
+    filename, Session, from_date, to_date, batch_size=config.BATCH_SIZE
 ):
     """
     Process the main .osm.bz file containing changesets, tags, and discussion comments.
@@ -229,10 +230,15 @@ def main():
         "changeset_file", help="Path to the main .osm.bz changeset file"
     )
     parser.add_argument(
-        "db_url", help="SQLAlchemy database URL (e.g. postgresql://user:pass@host/db)"
+        "db_url",
+        help="SQLAlchemy database URL (e.g. postgresql://user:pass@host/db)",
+        default=config.DB_URL,
     )
     parser.add_argument(
-        "--batch-size", type=int, default=BATCH_SIZE, help="Batch size for bulk inserts"
+        "--batch-size",
+        type=int,
+        default=config.BATCH_SIZE,
+        help="Batch size for bulk inserts",
     )
     parser.add_argument(
         "--no-truncate",
@@ -263,7 +269,7 @@ def main():
     engine = create_engine(
         args.db_url,
         poolclass=QueuePool,
-        pool_size=POOL_SIZE,
+        pool_size=config.BLOCK_SIZE,
         max_overflow=20,
         pool_timeout=30,
         pool_pre_ping=True,
@@ -272,13 +278,17 @@ def main():
     if args.truncate:
         # Check if tables exist before truncating
         with engine.connect() as conn:
-            tables_exist = conn.execute(text("""
+            tables_exist = conn.execute(
+                text(
+                    """
                 SELECT EXISTS (
                     SELECT FROM information_schema.tables 
                     WHERE table_name = 'changesets'
                 )
-            """)).scalar()
-            
+            """
+                )
+            ).scalar()
+
             if tables_exist:
                 logging.warning("Truncating existing tables")
                 truncate_tables()

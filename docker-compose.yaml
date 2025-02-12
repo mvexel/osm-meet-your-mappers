@@ -76,6 +76,4 @@ services:
       POSTGRES_USER: osm_user
       POSTGRES_PASSWORD: osm_pass
       POSTGRES_DB: osm_db
-    volumes:
-      - ./data:/data
     entrypoint: ["/app/scripts/archive_loader_entrypoint.sh"]
