@@ -31,25 +31,6 @@ services:
     # Override the default CMD to run the Alembic migration.
     command: alembic upgrade head
 
-  # Archive loader service.
-  loader:
-    build: .
-    container_name: osm_mappers_archive_loader
-    depends_on:
-      db:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: osm_user
-      POSTGRES_PASSWORD: osm_pass
-      POSTGRES_DB: osm_db
-    volumes:
-      - ./data:/data
-    # Use a custom entrypoint script for the loader.
-    entrypoint: ["/app/scripts/archive_loader_entrypoint.sh"]
 
   # Main FastAPI application.
   app:
