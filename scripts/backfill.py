@@ -12,8 +12,8 @@ from typing import Any, List, Optional, Set, Tuple
 import requests
 import yaml
 from lxml import etree
-from osm_changeset_loader.db import create_engine  # your engine setup
-from osm_changeset_loader.model import Changeset, Metadata
+from osm_meet_your_mappers.db import create_engine  # your engine setup
+from osm_meet_your_mappers.model import Changeset, Metadata
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker  # type: ignore
 from sqlalchemy.pool import QueuePool
