@@ -25,4 +25,4 @@ RUN chmod +x /app/scripts/init_db.sh
 
 # We do NOT define CMD here, or we define a default one that
 # can be overridden by docker-compose's "command:" block.
-CMD ["/app/scripts/init_db.sh && osm-meet-your-mappers", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/bin/sh", "-c", "/app/scripts/init_db.sh && osm-meet-your-mappers --host 0.0.0.0 --port 8000"]
