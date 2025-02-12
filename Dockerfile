@@ -38,6 +38,9 @@ RUN mkdir -p /app/alembic/versions
 # Make init script executable
 RUN chmod +x /app/scripts/init_db.sh
 
+# Install the package in editable mode
+RUN pip install -e .
+
 # Create a non-root user and switch to it
 RUN useradd -m appuser
 USER appuser
