@@ -292,5 +292,5 @@ def main():
 
 
 if __name__ == "__main__":
-    create_tables()
+    # Skip table creation since they should already exist
     main()
