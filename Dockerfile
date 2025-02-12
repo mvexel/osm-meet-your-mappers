@@ -11,7 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY . .
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir .[alembic]
+
+# Create a directory for alembic migrations
+RUN mkdir -p /app/alembic/versions
 
 # We do NOT define CMD here, or we define a default one that
 # can be overridden by docker-compose's "command:" block.

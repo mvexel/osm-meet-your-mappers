@@ -50,5 +50,21 @@ services:
       SLEEP_TIME: 300
     command: ["python", "scripts/backfill.py"]
 
+  # Migration service
+  migrations:
+    build: .
+    container_name: osm_mappers_migrations
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: osm_user
+      DB_PASS: osm_pass
+      DB_NAME: osm_db
+    command: ["alembic", "upgrade", "head"]
+    volumes:
+      - .:/app
+
 volumes:
   db_data:
