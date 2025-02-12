@@ -260,7 +260,21 @@ def main():
     )
 
     if args.truncate:
-        truncate_tables()
+        # Check if tables exist before truncating
+        with engine.connect() as conn:
+            tables_exist = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'changesets'
+                )
+            """)).scalar()
+            
+            if tables_exist:
+                logging.warning("Truncating existing tables")
+                truncate_tables()
+            else:
+                logging.error("Tables do not exist. Please ensure the database is initialized first.")
+                exit(1)
 
     from_date = (
         datetime.strptime(args.from_date, "%Y%m%d").date() if args.from_date else None
