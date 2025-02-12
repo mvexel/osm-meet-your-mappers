@@ -3,7 +3,7 @@ Database convenience functions.
 """
 
 from typing import List, Optional
-from sqlalchemy import create_engine, and_, func
+from sqlalchemy import create_engine, and_, func, text
 from sqlalchemy.orm import Session
 from sqlalchemy_utils import database_exists, drop_database, create_database
 from .model import Changeset, ChangesetComment, ChangesetTag, Metadata, Base
@@ -121,6 +121,23 @@ def get_mapper_statistics(
         .all()
     )
 
+
+def init_database(db_url=None):
+    """
+    Create the database and add the PostGIS extension.
+    """
+    if db_url is None:
+        db_url = config.DB_URL
+        
+    # Create database if it doesn't exist
+    if not database_exists(db_url):
+        create_database(db_url)
+    
+    # Connect to database and create PostGIS extension
+    engine = get_db_engine(db_url)
+    with engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+        conn.commit()
 
 def rebuild_database(db_url=Config.DB_URL):
     """
