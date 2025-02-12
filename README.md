@@ -31,7 +31,7 @@ class Config:
 
 3. Create the database tables:
 ```bash
-/opt/osm-meet-your-mappers/bin/python -c "from osm_changeset_loader.db import create_tables; create_tables()"
+/opt/osm-meet-your-mappers/bin/python -c "from osm_meet_your_mappers.db import create_tables; create_tables()"
 ```
 
 ## Service Installation
