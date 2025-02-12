@@ -15,26 +15,61 @@ services:
       timeout: 5s
       retries: 5
 
-  # The main FastAPI app
-  app:
-    build: . # Uses your Dockerfile in the current directory
-    container_name: osm_mappers_app
+  # Migration container using Alembic to upgrade schema.
+  migrate:
+    build: .
+    container_name: osm_mappers_migrate
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "8000:8000"
     environment:
-      # Environment variables for database connection
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
       POSTGRES_USER: osm_user
       POSTGRES_PASSWORD: osm_pass
       POSTGRES_DB: osm_db
-      # App configuration
+    # Override the default CMD to run the Alembic migration.
+    command: alembic upgrade head
+
+  # Archive loader service.
+  loader:
+    build: .
+    container_name: osm_mappers_archive_loader
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: osm_user
+      POSTGRES_PASSWORD: osm_pass
+      POSTGRES_DB: osm_db
+    volumes:
+      - ./data:/data
+    # Use a custom entrypoint script for the loader.
+    entrypoint: ["/app/scripts/archive_loader_entrypoint.sh"]
+
+  # Main FastAPI application.
+  app:
+    build: .
+    container_name: osm_mappers_app
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: osm_user
+      POSTGRES_PASSWORD: osm_pass
+      POSTGRES_DB: osm_db
       PORT: 8000
-    command: >
-      /bin/sh -c "/app/scripts/init_db.sh && osm-meet-your-mappers --host 0.0.0.0 --port 8000"
+    command: /bin/sh -c "/app/scripts/init_db.sh && osm-meet-your-mappers --host 0.0.0.0 --port 8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -42,7 +77,7 @@ services:
       retries: 5
       start_period: 40s
 
-  # The continuous backfill script
+  # Continuous backfill service.
   backfill:
     build: .
     container_name: osm_mappers_backfill
@@ -62,18 +97,3 @@ services:
       BLOCK_SIZE: 10
       SLEEP_TIME: 300
     command: ["python", "-u", "scripts/backfill.py"]
-
-  # The archive loader service
-  archive_loader:
-    build: .
-    container_name: osm_mappers_archive_loader
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: osm_user
-      POSTGRES_PASSWORD: osm_pass
-      POSTGRES_DB: osm_db
-    entrypoint: ["/app/scripts/archive_loader_entrypoint.sh"]
