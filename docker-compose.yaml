@@ -50,7 +50,7 @@ services:
       POSTGRES_PASSWORD: osm_pass
       POSTGRES_DB: osm_db
       PORT: 8000
-    command: /bin/sh -c "/app/scripts/init_db.sh && osm-meet-your-mappers --host 0.0.0.0 --port 8000"
+    command: osm-meet-your-mappers --host 0.0.0.0 --port 8000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

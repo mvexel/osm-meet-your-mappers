@@ -37,7 +37,7 @@ COPY . .
 RUN mkdir -p /app/alembic/versions
 
 # Make scripts executable
-RUN chmod +x /app/scripts/init_db.sh /app/scripts/init_phase.sh
+RUN chmod +x /app/scripts/init_phase.sh
 
 # Install the package in editable mode
 RUN pip install -e .
