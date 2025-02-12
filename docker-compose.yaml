@@ -9,13 +9,19 @@ services:
       POSTGRES_DB: osm_db
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U osm_user -d osm_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # The main FastAPI app
   app:
     build: . # Uses your Dockerfile in the current directory
     container_name: osm_mappers_app
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "8000:8000"
     environment:
@@ -29,13 +35,21 @@ services:
       PORT: 8000
     command: >
       /bin/sh -c "/app/scripts/init_db.sh && osm-meet-your-mappers --host 0.0.0.0 --port 8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # The continuous backfill script
   backfill:
     build: .
     container_name: osm_mappers_backfill
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      app:
+        condition: service_healthy
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
