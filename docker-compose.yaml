@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: osm_pass
       POSTGRES_DB: osm_db
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - /path/to/your/data/directory:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U osm_user -d osm_db"]
       interval: 10s
@@ -63,5 +63,3 @@ services:
       SLEEP_TIME: 300
     command: ["python", "scripts/backfill.py"]
 
-volumes:
-  db_data:
