@@ -12,30 +12,30 @@ from osm_meet_your_mappers.config import Config
 config = Config()
 
 def get_db_engine(db_url=None):
-    if db_url is None:
-        db_url = config.DB_URL
     """
     Get a database engine.
     """
+    if db_url is None:
+        db_url = config.DB_URL
     return create_engine(db_url)
 
 
 def get_db_session(db_url=None):
-    if db_url is None:
-        db_url = config.DB_URL
     """
     Get a database session.
     """
+    if db_url is None:
+        db_url = config.DB_URL
     engine = get_db_engine(db_url)
     return Session(engine)
 
 
 def create_tables(db_url=None):
-    if db_url is None:
-        db_url = config.DB_URL
     """
     Create database tables.
     """
+    if db_url is None:
+        db_url = config.DB_URL
     engine = get_db_engine(db_url)
     Changeset.__table__.create(engine, checkfirst=True)
     ChangesetComment.__table__.create(engine, checkfirst=True)
