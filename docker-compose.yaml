@@ -15,7 +15,7 @@ services:
     build: . # Uses your Dockerfile in the current directory
     container_name: osm_mappers_app
     depends_on:
-      - db
+      - migrations
     ports:
       - "8000:8000"
     environment:
