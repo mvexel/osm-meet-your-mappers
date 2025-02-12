@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
 set -e
-# Forward all arguments to the archive loader script.
-python /app/archive_loader.py "$@"
+
+# Forward all arguments to the archive loader script
+python /app/scripts/archive_loader.py "$@"
