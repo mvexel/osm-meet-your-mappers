@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 import argparse
 import logging
+import os
 from sqlalchemy import create_engine, text
 from osm_meet_your_mappers.config import Config
 
-def truncate_tables(db_url=None):
+def truncate_tables():
     """Truncate all tables in the database."""
-    config = Config()
-    engine = create_engine(db_url or config.DB_URL)
+    db_url = f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
+    engine = create_engine(db_url)
     
     with engine.connect() as conn:
         conn.execute(text("TRUNCATE TABLE changesets, changeset_tags, changeset_comments CASCADE;"))
@@ -15,19 +16,12 @@ def truncate_tables(db_url=None):
         logging.info("Tables truncated successfully")
 
 def main():
-    parser = argparse.ArgumentParser(description="Truncate all tables in the database")
-    parser.add_argument(
-        "--db-url",
-        help="Database URL (optional, will use config if not provided)",
-    )
-    
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s: %(message)s"
     )
     
-    args = parser.parse_args()
-    truncate_tables(args.db_url)
+    truncate_tables()
 
 if __name__ == "__main__":
     main()

@@ -232,9 +232,8 @@ def main():
         level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
     )
 
-    db_url = os.getenv('DATABASE_URL', args.db_url)
     engine = create_engine(
-        db_url,
+        f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}",
         poolclass=QueuePool,
         pool_size=config.BLOCK_SIZE,
         max_overflow=20,
