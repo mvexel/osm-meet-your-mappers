@@ -18,7 +18,10 @@ from datetime import datetime
 from pydantic import BaseModel
 import os
 from .model import Changeset, Metadata
-from .db import query_changesets, get_oldest_changeset_timestamp, get_mapper_statistics
+from .db import (
+    query_changesets,
+    get_mapper_statistics,
+)
 from .config import Config
 
 
@@ -33,9 +36,6 @@ class ChangesetResponse(BaseModel):
     max_lon: float
     max_lat: float
     open: Optional[bool]
-    bbox_area_km2: float
-    centroid_lon: float
-    centroid_lat: float
 
     class Config:
         from_attributes = True
@@ -60,6 +60,7 @@ static_dir = os.path.join(current_dir, "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
+# the home page
 @app.get("/")
 async def root():
     """Serve the main HTML page"""
@@ -141,22 +142,6 @@ async def get_changesets(
         limit=limit,
         offset=offset,
     )
-
-
-@app.get(
-    "/oldest",
-    summary="Get oldest changeset timestamp",
-    description="Retrieve the timestamp of the oldest changeset stored in the database.",
-    response_description="Timestamp of the oldest changeset in ISO format",
-)
-async def get_oldest_changeset():
-    """
-    Get the timestamp of the oldest changeset in the database.
-    Returns:
-        dict: Dictionary with the oldest changeset timestamp or null if no changesets exist
-    """
-    timestamp = get_oldest_changeset_timestamp()
-    return {"oldest_changeset_timestamp": timestamp.isoformat() if timestamp else None}
 
 
 @app.get(

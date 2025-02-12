@@ -78,15 +78,6 @@ def query_changesets(
     return query.offset(offset).limit(limit).all()
 
 
-def get_oldest_changeset_timestamp(db_url=Config.DB_URL):
-    """
-    Get the timestamp of the oldest changeset in the database.
-    """
-    session = get_db_session(db_url)
-    oldest = session.query(Changeset.closed_at).order_by(Changeset.closed_at).first()
-    return oldest[0] if oldest else None
-
-
 def get_mapper_statistics(
     min_lon: float,
     max_lon: float,

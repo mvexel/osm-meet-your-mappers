@@ -54,20 +54,13 @@ class ChangesetComment(Base):
 class Changeset(Base):
     __tablename__ = "changesets"
 
-    # Existing indices plus a new GiST index for the spatial column
     __table_args__ = (
-        # Index for user lookups and grouping
         Index("idx_changesets_user", "user"),
-        # Index for temporal queries
         Index("idx_changesets_created_at", "created_at"),
-        # Compound index for spatial queries on raw coordinates
         Index("idx_changesets_bbox", "min_lon", "max_lon", "min_lat", "max_lat"),
-        # Index for combined user+time queries
         Index("idx_changesets_user_created_at", "user", "created_at"),
-        # New indices for query patterns
         Index("idx_changesets_num_changes", "num_changes"),
         Index("idx_changesets_comments_count", "comments_count"),
-        # GiST index on the new spatial column
         Index("idx_changesets_bbox_geom", "bbox", postgresql_using="gist"),
     )
 
