@@ -11,6 +11,7 @@ from osm_meet_your_mappers.config import Config
 
 config = Config()
 
+
 def get_db_engine(db_url=None):
     """
     Get a database engine.
@@ -130,16 +131,17 @@ def init_database(db_url=None):
     """
     if db_url is None:
         db_url = config.DB_URL
-        
+
     # Create database if it doesn't exist
     if not database_exists(db_url):
         create_database(db_url)
-    
+
     # Connect to database and create PostGIS extension
     engine = get_db_engine(db_url)
     with engine.connect() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
         conn.commit()
+
 
 def rebuild_database(db_url=None):
     if db_url is None:

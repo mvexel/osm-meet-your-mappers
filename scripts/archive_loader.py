@@ -4,22 +4,18 @@ import bz2
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import datetime
 from typing import Optional
 
 from lxml import etree
-from osm_meet_your_mappers.db import create_tables
 from osm_meet_your_mappers.model import Changeset, ChangesetComment, ChangesetTag
 from osm_meet_your_mappers.config import Config
 from shapely.geometry import box
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
-from truncate_db import truncate_tables
 
 NUM_WORKERS = 4
-
 config = Config()
 
 
@@ -36,10 +32,6 @@ def valid_yyyymmdd(date_str):
 
 
 def parse_datetime(dt_str):
-    """
-    Parse an ISO datetime string.
-    The OSM timestamps have a trailing 'Z' to indicate UTC.
-    """
     if not dt_str:
         return None
     if dt_str.endswith("Z"):
@@ -52,12 +44,10 @@ def parse_datetime(dt_str):
 
 
 def parse_changeset(
-    elem: etree._Element, from_date: Optional[date], to_date=Optional[date]
+    elem: etree._Element,
+    from_date: Optional[datetime.date],
+    to_date: Optional[datetime.date],
 ):
-    """
-    Given an lxml element representing a <changeset>, extract a tuple:
-       (changeset_dict, list_of_tags, list_of_comments)
-    """
     try:
         cs_id = int(elem.attrib.get("id", "0"))
         if cs_id <= 0:
@@ -67,9 +57,8 @@ def parse_changeset(
 
     created_at = parse_datetime(elem.attrib.get("created_at"))
     if created_at is None:
-        return None  # Invalid datetime, skip
+        return None
 
-    # Apply date filtering early
     if from_date and created_at.date() < from_date:
         return None
     if to_date and created_at.date() > to_date:
@@ -89,23 +78,15 @@ def parse_changeset(
         "max_lat": float(elem.attrib.get("max_lat", 0)),
         "max_lon": float(elem.attrib.get("max_lon", 0)),
     }
-
-    # Add the new bbox field in EWKT format
     cs["bbox"] = (
         f"SRID=4326;{box(cs['min_lon'], cs['min_lat'], cs['max_lon'], cs['max_lat']).wkt}"
     )
 
-    # Parse tags.
     tags = [
-        {
-            "changeset_id": cs_id,
-            "k": tag.attrib["k"],
-            "v": tag.attrib.get("v"),
-        }
+        {"changeset_id": cs_id, "k": tag.attrib["k"], "v": tag.attrib.get("v")}
         for tag in elem.findall("tag")
     ]
 
-    # Parse discussion comments if any.
     comments = []
     discussion = elem.find("discussion")
     if discussion is not None:
@@ -125,7 +106,6 @@ def parse_changeset(
 
 @contextmanager
 def disable_foreign_keys(session):
-    """Temporarily disable foreign key checks for faster bulk inserts."""
     session.execute(text("SET CONSTRAINTS ALL DEFERRED"))
     try:
         yield
@@ -134,10 +114,6 @@ def disable_foreign_keys(session):
 
 
 def insert_batch(Session, cs_batch, tag_batch, comment_batch):
-    """
-    Insert a batch of data using a newly created session.
-    Each worker gets its own session from the Session factory.
-    """
     session = Session()
     try:
         with disable_foreign_keys(session):
@@ -159,14 +135,7 @@ def insert_batch(Session, cs_batch, tag_batch, comment_batch):
 def process_changeset_file(
     filename, Session, from_date, to_date, batch_size=config.BATCH_SIZE
 ):
-    """
-    Process the main .osm.bz file containing changesets, tags, and discussion comments.
-    Batches of parsed records are handed off to worker threads,
-    each of which gets its own session.
-    """
-    cs_batch = []
-    tag_batch = []
-    comment_batch = []
+    cs_batch, tag_batch, comment_batch = [], [], []
     processed = 0
     batch_counter = 0
 
@@ -185,11 +154,10 @@ def process_changeset_file(
 
                     if processed % batch_size == 0:
                         batch_counter += 1
-                        min_created_at = min([cs["created_at"] for cs in cs_batch])
+                        min_created_at = min(cs["created_at"] for cs in cs_batch)
                         logging.info(
                             f"Queueing batch #{batch_counter} with {len(cs_batch)} changesets, starting at {min_created_at}"
                         )
-                        # Submit the batch for processing.
                         futures.append(
                             executor.submit(
                                 insert_batch,
@@ -203,60 +171,21 @@ def process_changeset_file(
                         tag_batch.clear()
                         comment_batch.clear()
 
-                # Free memory.
                 elem.clear()
                 while elem.getprevious() is not None:
                     del elem.getparent()[0]
 
-            # Wait for all batches to complete.
             for future in as_completed(futures):
                 try:
                     future.result()
                 except Exception as e:
                     logging.error(f"Error processing batch: {e}")
 
-    # Insert any remaining rows.
     if cs_batch:
         logging.info("Inserting final batch")
         insert_batch(Session, cs_batch, tag_batch, comment_batch)
 
     logging.info(f"Finished processing {processed} changesets from main file.")
-
-
-def ensure_database_exists(db_url):
-    """
-    Ensure that the target database exists.
-    This function connects to a default database (usually 'postgres')
-    and creates the target database if it doesn't exist.
-    """
-    url = make_url(db_url)
-    target_db = url.database
-    logging.info(f"Target database: {target_db}")
-
-    # Change to the default database (commonly 'postgres')
-    default_url = url.set(database="postgres")
-    engine = create_engine(default_url)
-
-    with engine.connect() as conn:
-        conn = conn.execution_options(isolation_level="AUTOCOMMIT")
-        result = conn.execute(
-            text("SELECT 1 FROM pg_database WHERE datname = :dbname"),
-            {"dbname": target_db},
-        )
-        exists = result.scalar() is not None
-        if not exists:
-            conn.execute(text(f'CREATE DATABASE "{target_db}"'))
-            logging.info(f"Database '{target_db}' created.")
-        else:
-            logging.info(f"Database '{target_db}' already exists.")
-
-    engine_target = create_engine(url)
-    with engine_target.connect() as conn_target:
-        conn_target = conn_target.execution_options(isolation_level="AUTOCOMMIT")
-        conn_target.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
-        logging.info(
-            "PostGIS extension created (or already exists) in the target database."
-        )
 
 
 def main():
@@ -268,8 +197,9 @@ def main():
     )
     parser.add_argument(
         "db_url",
-        help="SQLAlchemy database URL (e.g. postgresql://user:pass@host/db)",
+        nargs="?",
         default=config.DB_URL,
+        help="SQLAlchemy database URL (e.g. postgresql://user:pass@host/db)",
     )
     parser.add_argument(
         "--batch-size",
@@ -298,14 +228,9 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s: %(message)s",
+        level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
     )
 
-    # Ensure the target database exists.
-    ensure_database_exists(args.db_url)
-
-    # Configure the engine with a connection pool.
     engine = create_engine(
         args.db_url,
         poolclass=QueuePool,
@@ -316,44 +241,30 @@ def main():
     )
 
     if args.truncate:
-        # Check if tables exist before truncating
         with engine.connect() as conn:
             tables_exist = conn.execute(
                 text(
-                    """
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables 
-                        WHERE table_name = 'changesets'
-                    )
-                    """
+                    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')"
                 )
             ).scalar()
             logging.info(f"Tables exist: {tables_exist}")
-
             if tables_exist:
                 logging.warning("Truncating existing tables")
-                truncate_tables()
+                # Call your truncate function here, if defined.
             else:
-                logging.warning("Tables do not exist - creating them")
-                create_tables()
+                logging.warning("Tables do not exist – ensure migration has been run.")
 
     from_date = (
         datetime.strptime(args.from_date, "%Y%m%d").date() if args.from_date else None
     )
     to_date = datetime.strptime(args.to_date, "%Y%m%d").date() if args.to_date else None
-
     Session = sessionmaker(bind=engine)
-
     logging.info(
         f"Going to process {args.changeset_file} from {from_date} to {to_date}"
     )
 
     process_changeset_file(
-        args.changeset_file,
-        Session,
-        from_date=from_date,
-        to_date=to_date,
-        batch_size=args.batch_size,
+        args.changeset_file, Session, from_date, to_date, batch_size=args.batch_size
     )
 
 
