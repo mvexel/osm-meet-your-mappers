@@ -2,6 +2,7 @@
 import argparse
 import bz2
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from datetime import datetime
@@ -231,8 +232,9 @@ def main():
         level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
     )
 
+    db_url = os.getenv('DATABASE_URL', args.db_url)
     engine = create_engine(
-        args.db_url,
+        db_url,
         poolclass=QueuePool,
         pool_size=config.BLOCK_SIZE,
         max_overflow=20,

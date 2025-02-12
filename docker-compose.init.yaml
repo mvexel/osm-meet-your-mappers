@@ -28,6 +28,7 @@ services:
       POSTGRES_USER: osm_user
       POSTGRES_PASSWORD: osm_pass
       POSTGRES_DB: osm_db
+      DATABASE_URL: postgresql://osm_user:osm_pass@db:5432/osm_db
     command: /app/scripts/init_phase.sh
 
   # Migration container using Alembic to upgrade schema
