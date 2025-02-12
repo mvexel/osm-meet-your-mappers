@@ -40,6 +40,8 @@ dependencies = [
 [project.scripts]
 osm-meet-your-mappers = "osm_meet_your_mappers.api:main"
 osm-meet-your-mappers-rebuild-db = "osm_meet_your_mappers.db:rebuild_database"
+osm-meet-your-mappers-backfill = "scripts.backfill:main"
+osm-meet-your-mappers-init-db = "osm_meet_your_mappers.db:create_tables"
 
 [tool.setuptools]
 include-package-data = true
