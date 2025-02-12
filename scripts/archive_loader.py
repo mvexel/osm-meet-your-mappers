@@ -237,6 +237,7 @@ def ensure_database_exists(db_url):
     engine = create_engine(default_url)
 
     with engine.connect() as conn:
+        conn = conn.execution_options(isolation_level="AUTOCOMMIT")
         result = conn.execute(
             text("SELECT 1 FROM pg_database WHERE datname = :dbname"),
             {"dbname": target_db},
@@ -244,9 +245,18 @@ def ensure_database_exists(db_url):
         exists = result.scalar() is not None
         if not exists:
             conn.execute(text(f'CREATE DATABASE "{target_db}"'))
+            conn.execute(text("CREATE EXTENSION POSTGIS"))
             logging.info(f"Database '{target_db}' created.")
         else:
             logging.info(f"Database '{target_db}' already exists.")
+
+    engine_target = create_engine(url)
+    with engine_target.connect() as conn_target:
+        conn_target = conn_target.execution_options(isolation_level="AUTOCOMMIT")
+        conn_target.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+        logging.info(
+            "PostGIS extension created (or already exists) in the target database."
+        )
 
 
 def main():
