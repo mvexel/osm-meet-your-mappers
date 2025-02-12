@@ -288,6 +288,7 @@ def main():
             """
                 )
             ).scalar()
+            logging.info(f"tables exist: {tables_exist}")
 
             if tables_exist:
                 logging.warning("Truncating existing tables")
