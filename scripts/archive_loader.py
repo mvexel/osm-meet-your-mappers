@@ -116,23 +116,29 @@ def disable_foreign_keys(session):
         session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
 
 
-def insert_batch(Session, cs_batch, tag_batch, comment_batch):
-    session = Session()
+def insert_batch(conn, cs_batch, tag_batch, comment_batch):
     try:
-        with disable_foreign_keys(session):
+        with conn.cursor() as cur:
             if cs_batch:
-                session.bulk_insert_mappings(Changeset, cs_batch)
+                execute_batch(cur, """
+                    INSERT INTO changesets (id, user, uid, created_at, closed_at, open, num_changes, comments_count, min_lat, min_lon, max_lat, max_lon, bbox)
+                    VALUES (%(id)s, %(user)s, %(uid)s, %(created_at)s, %(closed_at)s, %(open)s, %(num_changes)s, %(comments_count)s, %(min_lat)s, %(min_lon)s, %(max_lat)s, %(max_lon)s, %(bbox)s)
+                """, cs_batch)
             if tag_batch:
-                session.bulk_insert_mappings(ChangesetTag, tag_batch)
+                execute_batch(cur, """
+                    INSERT INTO changeset_tags (changeset_id, k, v)
+                    VALUES (%(changeset_id)s, %(k)s, %(v)s)
+                """, tag_batch)
             if comment_batch:
-                session.bulk_insert_mappings(ChangesetComment, comment_batch)
-            session.commit()
+                execute_batch(cur, """
+                    INSERT INTO changeset_comments (changeset_id, uid, user, date, text)
+                    VALUES (%(changeset_id)s, %(uid)s, %(user)s, %(date)s, %(text)s)
+                """, comment_batch)
+            conn.commit()
     except Exception as ex:
-        session.rollback()
+        conn.rollback()
         logging.error("Error during batch insert: %s", ex)
         raise
-    finally:
-        session.close()
 
 
 def process_changeset_file(
@@ -225,26 +231,23 @@ def main():
         level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
     )
 
-    engine = create_engine(
-        f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}",
-        poolclass=QueuePool,
-        pool_size=config.BLOCK_SIZE,
-        max_overflow=20,
-        pool_timeout=30,
-        pool_pre_ping=True,
+    conn = psycopg2.connect(
+        dbname=os.getenv('POSTGRES_DB'),
+        user=os.getenv('POSTGRES_USER'),
+        password=os.getenv('POSTGRES_PASSWORD'),
+        host=os.getenv('POSTGRES_HOST'),
+        port=os.getenv('POSTGRES_PORT')
     )
 
     if args.truncate:
-        with engine.connect() as conn:
-            tables_exist = conn.execute(
-                text(
-                    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')"
-                )
-            ).scalar()
+        with conn.cursor() as cur:
+            cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')")
+            tables_exist = cur.fetchone()[0]
             logging.info(f"Tables exist: {tables_exist}")
             if tables_exist:
                 logging.warning("Truncating existing tables")
-                truncate_tables()
+                cur.execute("TRUNCATE TABLE changesets, changeset_tags, changeset_comments CASCADE")
+                conn.commit()
             else:
                 logging.warning("Tables do not exist – ensure migration has been run.")
 
@@ -252,14 +255,14 @@ def main():
         datetime.strptime(args.from_date, "%Y%m%d").date() if args.from_date else None
     )
     to_date = datetime.strptime(args.to_date, "%Y%m%d").date() if args.to_date else None
-    Session = sessionmaker(bind=engine)
     logging.info(
         f"Going to process {args.changeset_file} from {from_date} to {to_date}"
     )
 
     process_changeset_file(
-        args.changeset_file, Session, from_date, to_date, batch_size=args.batch_size
+        args.changeset_file, conn, from_date, to_date, batch_size=args.batch_size
     )
+    conn.close()
 
 
 if __name__ == "__main__":
