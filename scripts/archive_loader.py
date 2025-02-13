@@ -11,6 +11,7 @@ from typing import Optional
 from lxml import etree
 from osm_meet_your_mappers.model import Changeset, ChangesetComment, ChangesetTag
 from osm_meet_your_mappers.config import Config
+from truncate_db import truncate_tables
 from shapely.geometry import box
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -251,7 +252,7 @@ def main():
             logging.info(f"Tables exist: {tables_exist}")
             if tables_exist:
                 logging.warning("Truncating existing tables")
-                # Call your truncate function here, if defined.
+                truncate_tables()
             else:
                 logging.warning("Tables do not exist – ensure migration has been run.")
 
