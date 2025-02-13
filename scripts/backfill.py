@@ -333,26 +333,23 @@ def main() -> None:
                 logging.error(f"Failed to process sequence {s}: {e}")
                 return True, None
 
-            with ThreadPoolExecutor(
-                max_workers=int(os.getenv("BLOCK_SIZE", 10))
-            ) as executor:
-                futures = {executor.submit(process_single_file, s): s for s in block}
-                for future in as_completed(futures):
-                    s = futures[future]
-                    try:
-                        file_empty, min_new_ts = future.result()
-                        if min_new_ts is not None:
-                            update_metadata_state(min_new_ts, conn)
-                        if not file_empty:
-                            block_new_work = True
-                    except Exception as e:
-                        logging.error(f"Error processing sequence {s}: {e}")
+        with ThreadPoolExecutor(
+            max_workers=int(os.getenv("BLOCK_SIZE", 10))
+        ) as executor:
+            futures = {executor.submit(process_single_file, s): s for s in block}
+            for future in as_completed(futures):
+                s = futures[future]
+                try:
+                    file_empty, min_new_ts = future.result()
+                    if min_new_ts is not None:
+                        update_metadata_state(min_new_ts)
+                    if not file_empty:
+                        block_new_work = True
+                except Exception as e:
+                    logging.error(f"Error processing sequence {s}: {e}")
 
-            if block_new_work:
-                work_done_overall = True
-
-            # Update seq to the smallest sequence in this block minus one.
-            seq = min(block) - 1
+        if block_new_work:
+            work_done_overall = True
 
         # If the entire block produced no new changesets, assume we've caught up.
         if not block_new_work:
