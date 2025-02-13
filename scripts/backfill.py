@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import argparse
 import gzip
 import io
 import logging
@@ -271,9 +270,6 @@ def wait_for_db(engine, max_retries=30, delay=1):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Continuously backfill the changeset database from OSM replication files (backwards replication) using multithreading, updating metadata state with the oldest changeset timestamp."
-    )
 
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
@@ -303,7 +299,7 @@ def main() -> None:
 
         work_done_overall = False
         seq = current_seq
-        # Process replication files in descending order until we reach --min-seq.
+        # Process replication files in descending order until we reach the minimum sequence.
         while seq > int(os.getenv("MIN_SEQ", 0)):
             # Build a block of sequence numbers (in descending order).
             block = list(
