@@ -16,5 +16,6 @@ echo "Database $POSTGRES_DB created or already exists."
 # Connect to the database and enable PostGIS
 PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS postgis;"
 echo "PostGIS extension enabled."
+echo "PostGIS extension enabled."
 
 echo "Database initialized successfully."
