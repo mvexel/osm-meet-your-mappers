@@ -234,39 +234,38 @@ def process_replication_content(
     return file_empty, min_new_ts
 
 
-def update_metadata_state(new_ts: datetime.datetime) -> None:
+def update_oldest_sequence(seq: int) -> None:
     """
-    Update the Metadata table (row with id==1) so that its state field reflects the oldest changeset timestamp.
-    For backwards replication, update only if the new timestamp is older than the current state.
+    Update the Metadata table to reflect the oldest sequence number currently stored.
     This operation is serialized using a global lock.
     """
     with metadata_lock:
         try:
             with conn.cursor() as cur:
-                cur.execute("SELECT state FROM metadata WHERE id = 1")
+                cur.execute("SELECT sequence FROM metadata WHERE id = 1")
                 row = cur.fetchone()
                 now = datetime.datetime.now(datetime.UTC)
                 if row is None:
                     cur.execute(
-                        "INSERT INTO metadata (id, state, timestamp) VALUES (1, %s, %s)",
-                        (new_ts.isoformat(), now),
+                        "INSERT INTO metadata (id, sequence, timestamp) VALUES (1, %s, %s)",
+                        (seq, now),
                     )
-                    logging.debug(f"Inserted metadata state: {new_ts.isoformat()}")
+                    logging.debug(f"Inserted metadata sequence: {seq}")
                 else:
-                    current_state_ts = datetime.datetime.fromisoformat(row[0])
-                    if new_ts < current_state_ts:
+                    current_sequence = row[0]
+                    if seq < current_sequence:
                         cur.execute(
-                            "UPDATE metadata SET state = %s, timestamp = %s WHERE id = 1",
-                            (new_ts.isoformat(), now),
+                            "UPDATE metadata SET sequence = %s, timestamp = %s WHERE id = 1",
+                            (seq, now),
                         )
                         logging.debug(
-                            f"Updated metadata state from {row[0]} to {new_ts.isoformat()}"
+                            f"Updated metadata sequence from {current_sequence} to {seq}"
                         )
                 conn.commit()
         except Exception as e:
             conn.rollback()
             logging.error(
-                f"Failed to update metadata state for timestamp {new_ts.isoformat()}: {e}"
+                f"Failed to update metadata sequence for sequence {seq}: {e}"
             )
 
 
@@ -299,23 +298,24 @@ def main() -> None:
         return
     req_session = requests.Session()
 
-    start_seq = int(os.getenv("START_SEQUENCE", 0))
+    stop_seq = int(os.getenv("START_SEQUENCE", 0))
     current_seq = get_current_sequence()
 
     if start_seq > current_seq:
         logging.error("START_SEQUENCE is greater than the current sequence. Exiting.")
         return
 
-    seq = start_seq
-    while seq <= current_seq:
-        # Build a block of sequence numbers (in ascending order).
+    seq = current_seq
+    while seq > stop_seq:
+        # Build a block of sequence numbers (in descending order).
         block = list(
             range(
                 seq,
-                min(
-                    current_seq + 1,
-                    seq + int(os.getenv("BLOCK_SIZE", 10)),
-                ),
+                max(
+                    stop_seq,
+                    seq - int(os.getenv("BLOCK_SIZE", 10)),
+                ) - 1,
+                -1
             )
         )
 
@@ -351,17 +351,16 @@ def main() -> None:
         if block_new_work:
             work_done_overall = True
 
-        # If the entire block produced no new changesets, assume we've caught up.
-        if not block_new_work:
-            logging.info(
-                "No new changesets found in this block; stopping processing."
-            )
-            break
+        if block_new_work:
+            work_done_overall = True
 
-        # Update seq to the largest sequence in this block plus one.
-        seq = max(block) + 1
+        # Update seq to the smallest sequence in this block minus one.
+        seq = min(block) - 1
 
-    logging.info("Finished processing all available sequences.")
+        # Update the metadata with the oldest sequence processed
+        update_oldest_sequence(seq)
+
+    logging.info("Finished processing sequences down to the start sequence.")
 
 
 if __name__ == "__main__":
