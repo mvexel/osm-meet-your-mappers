@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: ghcr.io/baosystems/postgis:17-3.5
@@ -19,43 +17,31 @@ services:
     build: .
     container_name: osm_mappers_init
     restart: "no"
+    env_file:
+      - .env
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: osm_user
-      POSTGRES_PASSWORD: osm_pass
-      POSTGRES_DB: osm_db
     command: /bin/sh -c "psql -U $POSTGRES_USER -d $POSTGRES_DB -c 'CREATE EXTENSION IF NOT EXISTS postgis;' && /app/scripts/init_phase.sh"
 
   migrate:
     build: .
     container_name: osm_mappers_migrate
+    env_file:
+      - .env
     depends_on:
       init:
         condition: service_completed_successfully
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: osm_user
-      POSTGRES_PASSWORD: osm_pass
-      POSTGRES_DB: osm_db
     command: alembic upgrade head
 
   loader:
     build: .
     container_name: osm_mappers_loader
+    env_file:
+      - .env
     depends_on:
       migrate:
         condition: service_completed_successfully
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: osm_user
-      POSTGRES_PASSWORD: osm_pass
-      POSTGRES_DB: osm_db
     volumes:
       - ${OSM_FILE_PATH}:/data/changesets.osm.bz2
     command: python /app/scripts/archive_loader.py /data/changesets.osm.bz2
@@ -63,29 +49,21 @@ services:
   app:
     build: .
     container_name: osm_mappers_app
+    env_file:
+      - .env
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: osm_user
-      POSTGRES_PASSWORD: osm_pass
-      POSTGRES_DB: osm_db
     command: python -m osm_meet_your_mappers.api
 
   backfill:
     build: .
     container_name: osm_mappers_backfill
+    env_file:
+      - .env
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: osm_user
-      POSTGRES_PASSWORD: osm_pass
-      POSTGRES_DB: osm_db
     command: python /app/scripts/backfill.py
 
 volumes:
