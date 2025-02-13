@@ -18,6 +18,14 @@ from archive_loader import insert_batch, parse_changeset
 
 load_dotenv()
 
+conn = psycopg2.connect(
+    dbname=os.getenv("POSTGRES_DB"),
+    user=os.getenv("POSTGRES_USER"),
+    password=os.getenv("POSTGRES_PASSWORD"),
+    host=os.getenv("POSTGRES_HOST"),
+    port=os.getenv("POSTGRES_PORT"),
+)
+
 insert_lock = threading.Lock()
 metadata_lock = threading.Lock()
 
@@ -221,7 +229,6 @@ def update_metadata_state(new_ts: datetime.datetime, SessionMaker: Any) -> None:
     This operation is serialized using a global lock.
     """
     with metadata_lock:
-        conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 cur.execute("SELECT state FROM metadata WHERE id = 1")
@@ -275,13 +282,6 @@ def main() -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
     )
 
-    conn = psycopg2.connect(
-        dbname=os.getenv("POSTGRES_DB"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
-        host=os.getenv("POSTGRES_HOST"),
-        port=os.getenv("POSTGRES_PORT"),
-    )
 
     # Wait for database to become available
     if not wait_for_db(conn):
