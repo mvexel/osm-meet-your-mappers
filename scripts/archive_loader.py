@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Optional
 
 from lxml import etree
+from shapely.geometry import box
 import psycopg2
 from psycopg2.extras import execute_batch
 
@@ -101,13 +102,6 @@ def parse_changeset(
     return cs, tags, comments
 
 
-@contextmanager
-def disable_foreign_keys(session):
-    session.execute(text("SET CONSTRAINTS ALL DEFERRED"))
-    try:
-        yield
-    finally:
-        session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
 
 
 def insert_batch(conn, cs_batch, tag_batch, comment_batch):
@@ -140,7 +134,7 @@ def process_changeset_file(
     Session,
     from_date,
     to_date,
-    batch_size=config.BATCH_SIZE,
+    batch_size=int(os.getenv('BATCH_SIZE', 1000)),
     chunk_size=1024 * 1024 * 10,
 ):
     with bz2.open(filename, "rb") as f:
@@ -192,13 +186,13 @@ def main():
     parser.add_argument(
         "db_url",
         nargs="?",
-        default=config.DB_URL,
+        default=os.getenv('DB_URL', 'postgresql://user:pass@localhost/db'),
         help="SQLAlchemy database URL (e.g. postgresql://user:pass@host/db)",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=config.BATCH_SIZE,
+        default=int(os.getenv('BATCH_SIZE', 1000)),
         help="Batch size for bulk inserts",
     )
     parser.add_argument(
