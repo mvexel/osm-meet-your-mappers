@@ -14,7 +14,7 @@ import yaml
 from lxml import etree
 import psycopg2
 from osm_meet_your_mappers.db import get_db_connection
-from archive_loader import insert_batch
+from archive_loader import insert_batch, parse_changeset
 
 # Global locks to serialize duplicate checking/insertion and metadata updates.
 insert_lock = threading.Lock()
@@ -221,7 +221,7 @@ def update_metadata_state(new_ts: datetime.datetime, SessionMaker: Any) -> None:
     This operation is serialized using a global lock.
     """
     with metadata_lock:
-        session = SessionMaker()
+        conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 cur.execute("SELECT state FROM metadata WHERE id = 1")
@@ -257,7 +257,8 @@ def wait_for_db(engine, max_retries=30, delay=1):
     while retries < max_retries:
         try:
             with engine.connect() as conn:
-                cur.execute("SELECT 1")
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
                 return True
         except Exception as e:
             logging.warning(
@@ -290,16 +291,16 @@ def main() -> None:
             current_seq = get_current_sequence()
         except Exception as e:
             logging.error(f"Failed to fetch current replication sequence: {e}")
-            time.sleep(config.SLEEP_TIME)
+            time.sleep(int(os.getenv('SLEEP_TIME', 60)))
             continue
 
         work_done_overall = False
         seq = current_seq
         # Process replication files in descending order until we reach --min-seq.
-        while seq > config.MIN_SEQ:
+        while seq > int(os.getenv('MIN_SEQ', 0)):
             # Build a block of sequence numbers (in descending order).
             block = list(
-                range(seq, max(config.MIN_SEQ, seq - config.BLOCK_SIZE) - 1, -1)
+                range(seq, max(int(os.getenv('MIN_SEQ', 0)), seq - int(os.getenv('BLOCK_SIZE', 10))) - 1, -1)
             )
             if not block:
                 break
@@ -312,20 +313,20 @@ def main() -> None:
                         s, req_session, retries=3, initial_delay=2.0
                     )
                     return process_replication_content(
-                        xml_bytes, SessionMaker, config.BATCH_SIZE
+                        xml_bytes, conn, int(os.getenv('BATCH_SIZE', 1000))
                     )
                 except Exception as e:
                     logging.error(f"Failed to process sequence {s}: {e}")
                     return True, None
 
-            with ThreadPoolExecutor(max_workers=config.BLOCK_SIZE) as executor:
+            with ThreadPoolExecutor(max_workers=int(os.getenv('BLOCK_SIZE', 10))) as executor:
                 futures = {executor.submit(process_single_file, s): s for s in block}
                 for future in as_completed(futures):
                     s = futures[future]
                     try:
                         file_empty, min_new_ts = future.result()
                         if min_new_ts is not None:
-                            update_metadata_state(min_new_ts, SessionMaker)
+                            update_metadata_state(min_new_ts, conn)
                         if not file_empty:
                             block_new_work = True
                     except Exception as e:
@@ -346,9 +347,9 @@ def main() -> None:
 
         if not work_done_overall:
             logging.info(
-                f"No new replication work found. Sleeping for {config.SLEEP_TIME} seconds..."
+                f"No new replication work found. Sleeping for {int(os.getenv('SLEEP_TIME', 60))} seconds..."
             )
-            time.sleep(config.SLEEP_TIME)
+            time.sleep(int(os.getenv('SLEEP_TIME', 60)))
         else:
             logging.info(
                 "Finished processing current backfill block. Checking for more work shortly..."
