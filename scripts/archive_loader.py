@@ -5,6 +5,7 @@ import logging
 import os
 from datetime import datetime
 from typing import Optional
+from osm_meet_your_mappers.db import get_db_connection
 
 import psycopg2
 from dotenv import load_dotenv
@@ -196,13 +197,7 @@ def main():
     from_date = os.getenv("FROM_DATE")
     to_date = os.getenv("TO_DATE")
 
-    conn = psycopg2.connect(
-        dbname=os.getenv("POSTGRES_DB"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
-        host=os.getenv("POSTGRES_HOST"),
-        port=os.getenv("POSTGRES_PORT"),
-    )
+    conn = get_db_connection()
 
     if truncate:
         with conn.cursor() as cur:

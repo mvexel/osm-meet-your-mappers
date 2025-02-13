@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import datetime
 from typing import Any, List, Optional, Set, Tuple
 
+from osm_meet_your_mappers.db import get_db_connection
 import psycopg2
 import requests
 from dotenv import load_dotenv
@@ -18,13 +19,7 @@ from archive_loader import insert_batch, parse_changeset
 
 load_dotenv()
 
-conn = psycopg2.connect(
-    dbname=os.getenv("POSTGRES_DB"),
-    user=os.getenv("POSTGRES_USER"),
-    password=os.getenv("POSTGRES_PASSWORD"),
-    host=os.getenv("POSTGRES_HOST"),
-    port=os.getenv("POSTGRES_PORT"),
-)
+conn = get_db_connection()
 
 insert_lock = threading.Lock()
 metadata_lock = threading.Lock()
@@ -258,15 +253,14 @@ def update_metadata_state(new_ts: datetime.datetime, SessionMaker: Any) -> None:
             )
 
 
-def wait_for_db(engine, max_retries=30, delay=1):
+def wait_for_db(conn, max_retries=30, delay=1):
     """Wait for database to become available"""
     retries = 0
     while retries < max_retries:
         try:
-            with engine.connect() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-                return True
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return True
         except Exception as e:
             logging.warning(
                 f"Database connection failed (attempt {retries + 1}/{max_retries}): {e}"
@@ -281,7 +275,6 @@ def main() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
     )
-
 
     # Wait for database to become available
     if not wait_for_db(conn):
