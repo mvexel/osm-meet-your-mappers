@@ -9,6 +9,17 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Set, Tuple
 
+def get_duplicate_ids(conn, cs_list: List[dict]) -> Set[int]:
+    """
+    Given a list of changeset dictionaries (each with an "id" key),
+    return the set of IDs that already exist in the database.
+    """
+    cs_ids = [cs["id"] for cs in cs_list]
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM changesets WHERE id = ANY(%s)", (cs_ids,))
+        existing = cur.fetchall()
+    return {row[0] for row in existing}
+
 import requests
 import yaml
 from archive_loader import insert_batch, parse_changeset
