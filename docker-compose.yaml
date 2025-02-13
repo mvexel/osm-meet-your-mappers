@@ -18,6 +18,7 @@ services:
   init:
     build: .
     container_name: osm_mappers_init
+    restart: "no"
     depends_on:
       db:
         condition: service_healthy
