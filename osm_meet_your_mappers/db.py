@@ -183,7 +183,7 @@ def truncate_tables(db_url=None, check_exist=True):
         conn.commit()
 
 
-def truncate_tables(check_exist=True):
+def truncate_tables(db_url=None, check_exist=True):
     """
     Truncate all tables in the database.
 
