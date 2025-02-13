@@ -4,12 +4,15 @@ import bz2
 import logging
 import os
 from datetime import datetime
+from dotenv import load_dotenv
 from typing import Optional
 
 from lxml import etree
 from shapely.geometry import box
 import psycopg2
 from psycopg2.extras import execute_batch
+
+load_dotenv()
 
 NUM_WORKERS = 4
 
@@ -184,47 +187,15 @@ def process_changeset_file(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Populate the database from OSM .osm.bz files."
-    )
-    parser.add_argument(
-        "changeset_file", help="Path to the main .osm.bz changeset file"
-    )
-    parser.add_argument(
-        "db_url",
-        nargs="?",
-        default=os.getenv("DB_URL", "postgresql://user:pass@localhost/db"),
-        help="SQLAlchemy database URL (e.g. postgresql://user:pass@host/db)",
-    )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=int(os.getenv("BATCH_SIZE", 1000)),
-        help="Batch size for bulk inserts",
-    )
-    parser.add_argument(
-        "--no-truncate",
-        action="store_false",
-        dest="truncate",
-        help="Do not truncate the tables before loading",
-    )
-    parser.add_argument(
-        "--from_date",
-        type=valid_yyyymmdd,
-        default=None,
-        help="Date to start import from (YYYYMMDD)",
-    )
-    parser.add_argument(
-        "--to_date",
-        type=valid_yyyymmdd,
-        default=None,
-        help="Date to stop import at (YYYYMMDD)",
-    )
-    args = parser.parse_args()
-
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
     )
+
+    changeset_file = os.getenv("CHANGESET_FILE")
+    batch_size = int(os.getenv("BATCH_SIZE", 1000))
+    truncate = os.getenv("TRUNCATE", "true").lower() == "true"
+    from_date = os.getenv("FROM_DATE")
+    to_date = os.getenv("TO_DATE")
 
     conn = psycopg2.connect(
         dbname=os.getenv("POSTGRES_DB"),
@@ -234,7 +205,7 @@ def main():
         port=os.getenv("POSTGRES_PORT"),
     )
 
-    if args.truncate:
+    if truncate:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')"
@@ -250,16 +221,14 @@ def main():
             else:
                 logging.warning("Tables do not exist – ensure migration has been run.")
 
-    from_date = (
-        datetime.strptime(args.from_date, "%Y%m%d").date() if args.from_date else None
-    )
-    to_date = datetime.strptime(args.to_date, "%Y%m%d").date() if args.to_date else None
+    from_date = datetime.strptime(from_date, "%Y%m%d").date() if from_date else None
+    to_date = datetime.strptime(to_date, "%Y%m%d").date() if to_date else None
     logging.info(
-        f"Going to process {args.changeset_file} from {from_date} to {to_date}"
+        f"Going to process {changeset_file} from {from_date} to {to_date}"
     )
 
     process_changeset_file(
-        args.changeset_file, conn, from_date, to_date, batch_size=args.batch_size
+        changeset_file, conn, from_date, to_date, batch_size=batch_size
     )
     conn.close()
 
