@@ -299,32 +299,25 @@ def main() -> None:
         return
     req_session = requests.Session()
 
-    while True:
-        try:
-            current_seq = get_current_sequence()
-        except Exception as e:
-            logging.error(f"Failed to fetch current replication sequence: {e}")
-            time.sleep(int(os.getenv("SLEEP_TIME", 60)))
-            continue
+    start_seq = int(os.getenv("START_SEQUENCE", 0))
+    current_seq = get_current_sequence()
 
-        work_done_overall = False
-        seq = current_seq
-        # Process replication files in descending order until we reach the minimum sequence.
-        while seq > int(os.getenv("MIN_SEQ", 0)):
-            # Build a block of sequence numbers (in descending order).
-            block = list(
-                range(
-                    seq,
-                    max(
-                        int(os.getenv("MIN_SEQ", 0)),
-                        seq - int(os.getenv("BLOCK_SIZE", 10)),
-                    )
-                    - 1,
-                    -1,
-                )
+    if start_seq > current_seq:
+        logging.error("START_SEQUENCE is greater than the current sequence. Exiting.")
+        return
+
+    seq = start_seq
+    while seq <= current_seq:
+        # Build a block of sequence numbers (in ascending order).
+        block = list(
+            range(
+                seq,
+                min(
+                    current_seq + 1,
+                    seq + int(os.getenv("BLOCK_SIZE", 10)),
+                ),
             )
-            if not block:
-                break
+        )
 
             block_new_work = False
 
@@ -361,23 +354,17 @@ def main() -> None:
             # Update seq to the smallest sequence in this block minus one.
             seq = min(block) - 1
 
-            # If the entire block produced no new changesets, assume we've caught up.
-            if not block_new_work:
-                logging.info(
-                    "No new changesets found in this block; stopping backward processing."
-                )
-                break
+        # If the entire block produced no new changesets, assume we've caught up.
+        if not block_new_work:
+            logging.info(
+                "No new changesets found in this block; stopping processing."
+            )
+            break
 
-        if not work_done_overall:
-            logging.info(
-                f"No new replication work found. Sleeping for {int(os.getenv('SLEEP_TIME', 60))} seconds..."
-            )
-            time.sleep(int(os.getenv("SLEEP_TIME", 60)))
-        else:
-            logging.info(
-                "Finished processing current backfill block. Checking for more work shortly..."
-            )
-            time.sleep(30)
+        # Update seq to the largest sequence in this block plus one.
+        seq = max(block) + 1
+
+    logging.info("Finished processing all available sequences.")
 
 
 if __name__ == "__main__":
