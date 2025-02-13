@@ -164,8 +164,8 @@ def process_replication_content(
                         most_recent_closed_at = max(
                             cs["created_at"] for cs in new_cs_batch
                         )
-                        logging.debug(
-                            f"Inserting {new_count} changesets, newest closed_at: {most_recent_closed_at}, id: {new_cs_batch[-1]['id']}"
+                        logging.info(
+                            f"[{threading.current_thread().name}] Inserting {new_count} changesets, newest closed_at: {most_recent_closed_at}, id: {new_cs_batch[-1]['id']}"
                         )
                         insert_batch(
                             conn, new_cs_batch, new_tag_batch, new_comment_batch
@@ -195,14 +195,13 @@ def process_replication_content(
                 if min_new_ts is None or batch_min < min_new_ts:
                     min_new_ts = batch_min
                 new_count = len(new_cs_batch)
-                new_changesets_in_file += new_count
                 most_recent_closed_at = max(cs["created_at"] for cs in new_cs_batch)
                 logging.info(
-                    f"Inserting {new_count} changesets, newest closed_at: {most_recent_closed_at}, id: {new_cs_batch[-1]['id']}"
+                    f"[{threading.current_thread().name}] Inserting {new_count} changesets, newest closed_at: {most_recent_closed_at}, id: {new_cs_batch[-1]['id']}"
                 )
                 insert_batch(conn, new_cs_batch, new_tag_batch, new_comment_batch)
     logging.debug(
-        f"Finished processing replication file: {processed} closed changesets parsed. New changesets: {new_changesets_in_file}"
+        f"[{threading.current_thread().name}] Finished processing replication file: {processed} closed changesets parsed. New changesets: {new_changesets_in_file}"
     )
     file_empty = new_changesets_in_file == 0
     return file_empty, min_new_ts
@@ -223,7 +222,9 @@ def update_oldest_sequence(seq: int) -> None:
                         "INSERT INTO metadata (id, sequence, timestamp) VALUES (1, %s, %s)",
                         (seq, now),
                     )
-                    logging.debug(f"Inserted metadata sequence: {seq}")
+                    logging.debug(
+                        f"[{threading.current_thread().name}] Inserted metadata sequence: {seq}"
+                    )
                 else:
                     current_sequence = row[0]
                     if seq < current_sequence:
@@ -232,12 +233,14 @@ def update_oldest_sequence(seq: int) -> None:
                             (seq, now),
                         )
                         logging.debug(
-                            f"Updated metadata sequence from {current_sequence} to {seq}"
+                            f"[{threading.current_thread().name}] Updated metadata sequence from {current_sequence} to {seq}"
                         )
                 conn.commit()
         except Exception as e:
             conn.rollback()
-            logging.error(f"Failed to update metadata sequence for sequence {seq}: {e}")
+            logging.error(
+                f"[{threading.current_thread().name}] Failed to update metadata sequence for sequence {seq}: {e}"
+            )
 
 
 def get_stored_oldest_sequence() -> Optional[int]:
@@ -269,7 +272,10 @@ def wait_for_db(conn, max_retries=30, delay=1):
 
 
 def process_block(
-    block: List[int], req_session: requests.Session, batch_size: int
+    block: List[int],
+    req_session: requests.Session,
+    batch_size: int,
+    pool_name: str = "Pool",
 ) -> Tuple[bool, Optional[datetime.datetime]]:
     """
     Process a block (list) of sequence numbers concurrently.
@@ -278,23 +284,28 @@ def process_block(
       (all_duplicates, min_new_ts)
 
     'all_duplicates' is True if the entire block produced no new changesets.
+
+    The 'pool_name' parameter is used to set the thread_name_prefix for the executor.
     """
     block_new_work = False
     min_ts: Optional[datetime.datetime] = None
 
     def process_single_file(s: int) -> Tuple[bool, Optional[datetime.datetime]]:
         try:
-            # Throttle before each request
             throttle()
             xml_bytes = download_with_retry(
                 s, req_session, retries=3, initial_delay=2.0
             )
             return process_replication_content(xml_bytes, batch_size)
         except Exception as e:
-            logging.error(f"Failed to process sequence {s}: {e}")
+            logging.error(
+                f"[{threading.current_thread().name}] Failed to process sequence {s}: {e}"
+            )
             return True, None  # Treat as empty
 
-    with ThreadPoolExecutor(max_workers=len(block)) as executor:
+    with ThreadPoolExecutor(
+        max_workers=len(block), thread_name_prefix=pool_name
+    ) as executor:
         futures = {executor.submit(process_single_file, s): s for s in block}
         for future in as_completed(futures):
             s = futures[future]
@@ -306,7 +317,9 @@ def process_block(
                     if min_ts is None or file_min_ts < min_ts:
                         min_ts = file_min_ts
             except Exception as e:
-                logging.error(f"Error processing sequence {s}: {e}")
+                logging.error(
+                    f"[{threading.current_thread().name}] Error processing sequence {s}: {e}"
+                )
 
     all_duplicates = not block_new_work
     return all_duplicates, min_ts
@@ -318,7 +331,9 @@ def backfill_worker(start_seq: int) -> None:
     """
     stored_oldest = get_stored_oldest_sequence()
     if stored_oldest is None:
-        logging.info("No stored oldest sequence found, nothing to backfill.")
+        logging.info(
+            f"[{threading.current_thread().name}] No stored oldest sequence found, nothing to backfill."
+        )
         return
 
     seq = stored_oldest
@@ -329,12 +344,15 @@ def backfill_worker(start_seq: int) -> None:
     while seq > start_seq:
         block = list(range(seq, max(start_seq, seq - block_size) - 1, -1))
         logging.debug(
-            f"[Backfill] Processing block from {block[0]} down to {block[-1]}"
+            f"[{threading.current_thread().name}] Processing block from {block[0]} down to {block[-1]}"
         )
-        _, min_ts = process_block(block, req_session, batch_size)
+        # Specify the pool name as "Backfill" so threads in this pool are clearly identified.
+        _, _ = process_block(block, req_session, batch_size, pool_name="Backfill")
         seq = block[-1] - 1
         update_oldest_sequence(seq)
-    logging.info("Backfill worker reached START_SEQUENCE.")
+    logging.info(
+        f"[{threading.current_thread().name}] Backfill worker reached START_SEQUENCE."
+    )
 
 
 def catch_up_worker() -> None:
@@ -348,31 +366,40 @@ def catch_up_worker() -> None:
 
     while True:
         current_seq = get_current_sequence()
-        logging.debug(f"[Catch-up] Current remote sequence: {current_seq}")
+        logging.debug(
+            f"[{threading.current_thread().name}] Current remote sequence: {current_seq}"
+        )
         seq = current_seq
         while seq > 0:
             block = list(range(seq, seq - block_size, -1))
             logging.debug(
-                f"[Catch-up] Processing block from {block[0]} down to {block[-1]}"
+                f"[{threading.current_thread().name}] Processing block from {block[0]} down to {block[-1]}"
             )
-            all_duplicates, _ = process_block(block, req_session, batch_size)
+            # Specify the pool name as "Catch-up" so these threads are named accordingly.
+            all_duplicates, _ = process_block(
+                block, req_session, batch_size, pool_name="Catch-up"
+            )
             if all_duplicates:
                 logging.debug(
-                    "[Catch-up] Block produced only duplicates, stopping descent."
+                    f"[{threading.current_thread().name}] Block produced only duplicates, stopping descent."
                 )
                 break
             seq = block[-1] - 1
             if seq <= 0:
                 break
         logging.info(
-            "[Catch-up] Completed a pass from current sequence. Sleeping before next poll..."
+            f"[{threading.current_thread().name}] Completed a pass from current sequence. Sleeping before next poll..."
         )
-        time.sleep(300)  # Sleep 5 minutes before checking again
+        time.sleep(
+            int(os.getenv("SLEEP_TIME", 300))
+        )  # Sleep 5 minutes before checking again
 
 
 def main() -> None:
+    # Configure logging to include the thread name in every message.
     logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(threadName)s]: %(message)s",
     )
     if not wait_for_db(conn):
         logging.error("Failed to connect to database after multiple attempts. Exiting.")
@@ -385,11 +412,11 @@ def main() -> None:
         current_seq = get_current_sequence()
         update_oldest_sequence(current_seq)
 
-    # Spawn the two worker threads.
+    # Spawn the two worker threads with explicit names.
     t_backfill = threading.Thread(
-        target=backfill_worker, args=(start_seq,), daemon=True
+        target=backfill_worker, args=(start_seq,), daemon=True, name="Backfill"
     )
-    t_catchup = threading.Thread(target=catch_up_worker, daemon=True)
+    t_catchup = threading.Thread(target=catch_up_worker, daemon=True, name="Catch-up")
 
     t_backfill.start()
     t_catchup.start()
