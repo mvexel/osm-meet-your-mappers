@@ -135,64 +135,51 @@ def insert_batch(Session, cs_batch, tag_batch, comment_batch):
         session.close()
 
 
-def process_chunk(chunk, Session, from_date, to_date, batch_size):
-    cs_batch, tag_batch, comment_batch = [], [], []
-    processed = 0
-    batch_counter = 0
-
-    context = etree.iterparse(io.BytesIO(chunk), events=("end",), tag="changeset")
-    for _, elem in context:
-        parsed = parse_changeset(elem, from_date, to_date)
-        if parsed:
-            cs, tags, comments = parsed
-            cs_batch.append(cs)
-            tag_batch.extend(tags)
-            comment_batch.extend(comments)
-            processed += 1
-
-            if processed % batch_size == 0:
-                batch_counter += 1
-                min_created_at = min(cs["created_at"] for cs in cs_batch)
-                logging.info(
-                    f"Queueing batch #{batch_counter} with {len(cs_batch)} changesets, starting at {min_created_at}"
-                )
-                insert_batch(Session, cs_batch.copy(), tag_batch.copy(), comment_batch.copy())
-                cs_batch.clear()
-                tag_batch.clear()
-                comment_batch.clear()
-
-        elem.clear()
-        while elem.getprevious() is not None:
-            del elem.getparent()[0]
-
-    if cs_batch:
-        logging.info("Inserting final batch")
-        insert_batch(Session, cs_batch, tag_batch, comment_batch)
-
-    logging.info(f"Finished processing {processed} changesets from chunk.")
-
-
 def process_changeset_file(
-    filename, Session, from_date, to_date, batch_size=config.BATCH_SIZE, chunk_size=1024*1024*10
+    filename,
+    Session,
+    from_date,
+    to_date,
+    batch_size=config.BATCH_SIZE,
+    chunk_size=1024 * 1024 * 10,
 ):
     with bz2.open(filename, "rb") as f:
-        chunks = []
-        while True:
-            chunk = f.read(chunk_size)
-            if not chunk:
-                break
-            chunks.append(chunk)
+        cs_batch, tag_batch, comment_batch = [], [], []
+        processed = 0
+        batch_counter = 0
 
-        with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
-            futures = [
-                executor.submit(process_chunk, chunk, Session, from_date, to_date, batch_size)
-                for chunk in chunks
-            ]
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                except Exception as e:
-                    logging.error(f"Error processing chunk: {e}")
+        context = etree.iterparse(f, events=("end",), tag="changeset")
+        for _, elem in context:
+            parsed = parse_changeset(elem, from_date, to_date)
+            if parsed:
+                cs, tags, comments = parsed
+                cs_batch.append(cs)
+                tag_batch.extend(tags)
+                comment_batch.extend(comments)
+                processed += 1
+
+                if processed % batch_size == 0:
+                    batch_counter += 1
+                    min_created_at = min(cs["created_at"] for cs in cs_batch)
+                    logging.info(
+                        f"Queueing batch #{batch_counter} with {len(cs_batch)} changesets, starting at {min_created_at}"
+                    )
+                    insert_batch(
+                        Session, cs_batch.copy(), tag_batch.copy(), comment_batch.copy()
+                    )
+                    cs_batch.clear()
+                    tag_batch.clear()
+                    comment_batch.clear()
+
+            elem.clear()
+            while elem.getprevious() is not None:
+                del elem.getparent()[0]
+
+        if cs_batch:
+            logging.info("Inserting final batch")
+            insert_batch(Session, cs_batch, tag_batch, comment_batch)
+
+        logging.info(f"Finished processing {processed} changesets from chunk.")
 
 
 def main():
