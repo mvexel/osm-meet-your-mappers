@@ -17,10 +17,9 @@ services:
       timeout: 5s
       retries: 5
 
-  # Initial database setup
-  init:
+  app:
     build: .
-    container_name: osm_mappers_init
+    container_name: osm_mappers_app
     depends_on:
       db:
         condition: service_healthy
@@ -30,22 +29,21 @@ services:
       POSTGRES_USER: osm_user
       POSTGRES_PASSWORD: osm_pass
       POSTGRES_DB: osm_db
-    command: /app/scripts/init_phase.sh
+    command: python -m osm_meet_your_mappers.api
 
-  # Migration container using Alembic to upgrade schema
-  migrate:
+  backfill:
     build: .
-    container_name: osm_mappers_migrate
+    container_name: osm_mappers_backfill
     depends_on:
-      init:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
       POSTGRES_USER: osm_user
       POSTGRES_PASSWORD: osm_pass
       POSTGRES_DB: osm_db
-    command: alembic upgrade head
+    command: python /app/scripts/backfill.py
 
 volumes:
   db_data:
