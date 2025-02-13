@@ -12,12 +12,8 @@ from typing import Any, List, Optional, Set, Tuple
 import requests
 import yaml
 from lxml import etree
-from osm_meet_your_mappers.db import create_engine  # your engine setup
-from osm_meet_your_mappers.model import Changeset, Metadata
-from osm_meet_your_mappers.config import Config
-from sqlalchemy import select
-from sqlalchemy.orm import sessionmaker  # type: ignore
-from sqlalchemy.pool import QueuePool
+import psycopg2
+from osm_meet_your_mappers.db import get_db_connection
 from archive_loader import insert_batch
 
 # Global locks to serialize duplicate checking/insertion and metadata updates.
@@ -110,22 +106,16 @@ def get_current_sequence(
     return sequence
 
 
-def get_duplicate_ids(SessionMaker: Any, cs_list: List[dict]) -> Set[int]:
+def get_duplicate_ids(conn, cs_list: List[dict]) -> Set[int]:
     """
     Given a list of changeset dictionaries (each with an "id" key), return the set of IDs that
     already exist in the database.
     """
     cs_ids = [cs["id"] for cs in cs_list]
-    session = SessionMaker()
-    try:
-        existing = (
-            session.execute(select(Changeset.id).where(Changeset.id.in_(cs_ids)))
-            .scalars()
-            .all()
-        )
-        return set(existing)
-    finally:
-        session.close()
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM changesets WHERE id = ANY(%s)", (cs_ids,))
+        existing = cur.fetchall()
+    return {row[0] for row in existing}
 
 
 def process_replication_content(

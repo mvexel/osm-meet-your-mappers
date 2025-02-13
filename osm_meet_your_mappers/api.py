@@ -17,11 +17,7 @@ from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
 import os
-from .model import Changeset, Metadata
-from .db import (
-    query_changesets,
-    get_mapper_statistics,
-)
+from .db import get_db_connection
 from osm_meet_your_mappers.config import Config
 
 
@@ -137,17 +133,40 @@ async def get_changesets(
     """
     Get changesets with optional filters.
     """
-    return query_changesets(
-        min_lon=min_lon,
-        max_lon=max_lon,
-        min_lat=min_lat,
-        max_lat=max_lat,
-        user=user,
-        created_after=created_after,
-        created_before=created_before,
-        limit=limit,
-        offset=offset,
-    )
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            query = """
+                SELECT id, created_at, closed_at, user, uid, min_lon, min_lat, max_lon, max_lat, open
+                FROM changesets
+                WHERE (%s IS NULL OR min_lon >= %s)
+                  AND (%s IS NULL OR max_lon <= %s)
+                  AND (%s IS NULL OR min_lat >= %s)
+                  AND (%s IS NULL OR max_lat <= %s)
+                  AND (%s IS NULL OR user = %s)
+                  AND (%s IS NULL OR created_at >= %s)
+                  AND (%s IS NULL OR created_at <= %s)
+                LIMIT %s OFFSET %s
+            """
+            cur.execute(query, (min_lon, min_lon, max_lon, max_lon, min_lat, min_lat, max_lat, max_lat, user, user, created_after, created_after, created_before, created_before, limit, offset))
+            results = cur.fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "created_at": row[1],
+                    "closed_at": row[2],
+                    "user": row[3],
+                    "uid": row[4],
+                    "min_lon": row[5],
+                    "min_lat": row[6],
+                    "max_lon": row[7],
+                    "max_lat": row[8],
+                    "open": row[9],
+                }
+                for row in results
+            ]
+    finally:
+        conn.close()
 
 
 @app.get(
@@ -194,18 +213,30 @@ async def get_mappers(
     """
     Retrieve all unique mappers with number of changes and date of most recent change for a bounding box.
     """
-    mapper_stats = get_mapper_statistics(
-        min_lon, max_lon, min_lat, max_lat, min_changesets
-    )
-    return [
-        {
-            "user": stat.user,
-            "changeset_count": stat.changeset_count,
-            "first_change": stat.first_change.isoformat(),
-            "last_change": stat.last_change.isoformat(),
-        }
-        for stat in mapper_stats
-    ]
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            query = """
+                SELECT user, COUNT(id) AS changeset_count, MIN(created_at) AS first_change, MAX(created_at) AS last_change
+                FROM changesets
+                WHERE min_lon >= %s AND max_lon <= %s AND min_lat >= %s AND max_lat <= %s
+                GROUP BY user
+                HAVING COUNT(id) >= %s
+                ORDER BY changeset_count DESC
+            """
+            cur.execute(query, (min_lon, max_lon, min_lat, max_lat, min_changesets))
+            results = cur.fetchall()
+            return [
+                {
+                    "user": row[0],
+                    "changeset_count": row[1],
+                    "first_change": row[2].isoformat(),
+                    "last_change": row[3].isoformat(),
+                }
+                for row in results
+            ]
+    finally:
+        conn.close()
 
 
 @app.get(
@@ -219,16 +250,16 @@ async def get_metadata():
     Retrieve the replication metadata state from the database.
     This shows the lowest replication sequence number processed and its timestamp.
     """
-    from .db import get_db_session
-
-    db = get_db_session()
+    conn = get_db_connection()
     try:
-        meta = db.query(Metadata).filter(Metadata.id == 1).first()
-        if meta is None:
-            raise HTTPException(status_code=404, detail="Metadata not found")
-        return meta
+        with conn.cursor() as cur:
+            cur.execute("SELECT state, timestamp FROM metadata WHERE id = 1")
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Metadata not found")
+            return {"state": row[0], "timestamp": row[1]}
     finally:
-        db.close()
+        conn.close()
 
 
 def main():
