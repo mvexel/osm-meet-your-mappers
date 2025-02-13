@@ -3,6 +3,7 @@ import argparse
 import bz2
 import logging
 import os
+import io
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from datetime import datetime
