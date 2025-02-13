@@ -105,16 +105,39 @@ def get_current_sequence(
     return sequence
 
 
-def get_duplicate_ids(conn, cs_list: List[dict]) -> Set[int]:
+def upsert_changesets(conn, cs_batch: List[dict], tag_batch: List[dict], comment_batch: List[dict]) -> None:
     """
-    Given a list of changeset dictionaries (each with an "id" key),
-    return the set of IDs that already exist in the database.
+    Upsert changesets into the database. If a changeset already exists, update it.
     """
-    cs_ids = [cs["id"] for cs in cs_list]
     with conn.cursor() as cur:
-        cur.execute("SELECT id FROM changesets WHERE id = ANY(%s)", (cs_ids,))
-        existing = cur.fetchall()
-    return {row[0] for row in existing}
+        for cs in cs_batch:
+            cur.execute("""
+                INSERT INTO changesets (id, created_at, closed_at, open, user_id, user_name, num_changes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                closed_at = EXCLUDED.closed_at,
+                open = EXCLUDED.open,
+                num_changes = EXCLUDED.num_changes
+                WHERE changesets.closed_at < EXCLUDED.closed_at OR changesets.open <> EXCLUDED.open;
+            """, (cs["id"], cs["created_at"], cs["closed_at"], cs["open"], cs["user_id"], cs["user_name"], cs["num_changes"]))
+
+        for tag in tag_batch:
+            cur.execute("""
+                INSERT INTO changeset_tags (changeset_id, key, value)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (changeset_id, key) DO UPDATE SET
+                value = EXCLUDED.value;
+            """, (tag["changeset_id"], tag["key"], tag["value"]))
+
+        for comment in comment_batch:
+            cur.execute("""
+                INSERT INTO changeset_comments (changeset_id, user_id, user_name, date, text)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (changeset_id, user_id, date) DO UPDATE SET
+                text = EXCLUDED.text;
+            """, (comment["changeset_id"], comment["user_id"], comment["user_name"], comment["date"], comment["text"]))
+
+    conn.commit()
 
 
 def process_replication_content(
@@ -167,7 +190,7 @@ def process_replication_content(
                         logging.info(
                             f"[{threading.current_thread().name}] Inserting {new_count} changesets, newest closed_at: {most_recent_closed_at}, id: {new_cs_batch[-1]['id']}"
                         )
-                        insert_batch(
+                        upsert_changesets(
                             conn, new_cs_batch, new_tag_batch, new_comment_batch
                         )
                 cs_batch.clear()
