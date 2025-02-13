@@ -301,7 +301,7 @@ def main() -> None:
     stop_seq = int(os.getenv("START_SEQUENCE", 0))
     current_seq = get_current_sequence()
 
-    if start_seq > current_seq:
+    if stop_seq > current_seq:
         logging.error("START_SEQUENCE is greater than the current sequence. Exiting.")
         return
 
@@ -342,7 +342,7 @@ def main() -> None:
                 try:
                     file_empty, min_new_ts = future.result()
                     if min_new_ts is not None:
-                        update_metadata_state(min_new_ts)
+                        update_oldest_sequence(s)
                     if not file_empty:
                         block_new_work = True
                 except Exception as e:
