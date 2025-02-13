@@ -122,7 +122,7 @@ const dataHandler = {
     elements.export.container.style.display = data.length ? "block" : "none";
 
     const columns = [
-      { key: "user", label: "User", type: "string" },
+      { key: "username", label: "User", type: "string" },
       { key: "changeset_count", label: "Changeset Count", type: "number" },
       { key: "first_change", label: "First Change", type: "date" },
       { key: "last_change", label: "Last Change", type: "date" },
@@ -153,7 +153,7 @@ const dataHandler = {
         const td = document.createElement("td");
         const value = item[col.key];
 
-        if (col.key === "user") {
+        if (col.key === "username") {
           // Create a link to the OSM user page
           const link = document.createElement("a");
           link.href = `https://www.openstreetmap.org/user/${value}`;
@@ -190,12 +190,17 @@ const dataHandler = {
 
   exportToCsv() {
     if (!state.currentData) return;
-    const headers = ["user", "changeset_count", "first_change", "last_change"];
+    const headers = [
+      "username",
+      "changeset_count",
+      "first_change",
+      "last_change",
+    ];
     const csvContent = [
       headers.join(","),
       ...state.currentData.map((row) =>
         [
-          `"${row.user}"`,
+          `"${row.username}"`,
           row.changeset_count,
           new Date(row.first_change).toISOString(),
           new Date(row.last_change).toISOString(),

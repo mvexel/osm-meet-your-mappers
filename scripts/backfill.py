@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import datetime
 import gzip
 import io
 import logging
@@ -6,16 +7,15 @@ import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import datetime
 from typing import Any, List, Optional, Set, Tuple
 
-from osm_meet_your_mappers.db import get_db_connection
-import psycopg2
 import requests
-from dotenv import load_dotenv
 import yaml
-from lxml import etree
 from archive_loader import insert_batch, parse_changeset
+from dotenv import load_dotenv
+from lxml import etree
+
+from osm_meet_your_mappers.db import get_db_connection
 
 load_dotenv()
 
@@ -25,22 +25,41 @@ insert_lock = threading.Lock()
 metadata_lock = threading.Lock()
 
 
-def model_to_dict(instance) -> dict:
+def get_highest_missing_id(conn):
     """
-    Convert a SQLAlchemy model instance to a dictionary for bulk insertion.
-    Only includes the columns defined in the model's table.
-    For geometry columns (like bbox) the value is converted to EWKT.
+    Find the highest changeset ID that is missing - this may be a gap or the bottom
+    of where we have replicated.
+    We don't use this yet....
     """
-    from geoalchemy2.shape import to_shape
-
-    d = {}
-    for col in instance.__table__.columns:
-        value = getattr(instance, col.name)
-        if col.name == "bbox" and value is not None:
-            d[col.name] = f"SRID=4326;{to_shape(value).wkt}"
-        else:
-            d[col.name] = value
-    return d
+    query = """
+    WITH m AS (
+      SELECT MIN(id) AS min_id, MAX(id) AS max_id
+      FROM changesets
+    ),
+    candidate_ids AS (
+      -- Candidate below the current min:
+      SELECT (min_id - 1) AS candidate
+      FROM m
+      UNION
+      -- Candidates for gaps between IDs:
+      SELECT t1.id + 1
+      FROM changesets t1
+      UNION
+      -- Candidate after the current max (in case there are no gaps):
+      SELECT (max_id + 1)
+      FROM m
+    )
+    SELECT candidate AS highest_missing_id
+    FROM candidate_ids c
+    WHERE candidate >= 0
+      AND NOT EXISTS (SELECT 1 FROM changesets WHERE id = candidate)
+    ORDER BY candidate
+    LIMIT 1;
+    """
+    with conn.cursor() as cur:
+        cur.execute(query)
+        result = cur.fetchone()
+        return result[0] if result is not None else None
 
 
 def replication_file_url(
@@ -121,7 +140,7 @@ def get_duplicate_ids(conn, cs_list: List[dict]) -> Set[int]:
 
 
 def process_replication_content(
-    xml_bytes: bytes, SessionMaker: Any, batch_size: int
+    xml_bytes: bytes, batch_size: int
 ) -> Tuple[bool, Optional[datetime.datetime]]:
     """
     Process the XML content (bytes) of a replication file using a streaming parser.
@@ -156,7 +175,7 @@ def process_replication_content(
 
             if len(cs_batch) >= batch_size:
                 with insert_lock:
-                    dup_ids = get_duplicate_ids(SessionMaker, cs_batch)
+                    dup_ids = get_duplicate_ids(conn, cs_batch)
                     new_cs_batch = [cs for cs in cs_batch if cs["id"] not in dup_ids]
                     new_tag_batch = [
                         tag for tag in tag_batch if tag["changeset_id"] not in dup_ids
@@ -176,7 +195,7 @@ def process_replication_content(
                             f"Inserting batch of {new_count} new changesets (from {len(cs_batch)} closed changesets)"
                         )
                         insert_batch(
-                            SessionMaker, new_cs_batch, new_tag_batch, new_comment_batch
+                            conn, new_cs_batch, new_tag_batch, new_comment_batch
                         )
                 cs_batch.clear()
                 tag_batch.clear()
@@ -188,7 +207,7 @@ def process_replication_content(
 
     if cs_batch:
         with insert_lock:
-            dup_ids = get_duplicate_ids(SessionMaker, cs_batch)
+            dup_ids = get_duplicate_ids(conn, cs_batch)
             new_cs_batch = [cs for cs in cs_batch if cs["id"] not in dup_ids]
             new_tag_batch = [
                 tag for tag in tag_batch if tag["changeset_id"] not in dup_ids
@@ -207,9 +226,7 @@ def process_replication_content(
                 logging.info(
                     f"Inserting final batch of {new_count} new changesets (from {len(cs_batch)} closed changesets)"
                 )
-                insert_batch(
-                    SessionMaker, new_cs_batch, new_tag_batch, new_comment_batch
-                )
+                insert_batch(conn, new_cs_batch, new_tag_batch, new_comment_batch)
     logging.debug(
         f"Finished processing replication file: {processed} closed changesets parsed. New changesets: {new_changesets_in_file}"
     )
@@ -217,7 +234,7 @@ def process_replication_content(
     return file_empty, min_new_ts
 
 
-def update_metadata_state(new_ts: datetime.datetime, SessionMaker: Any) -> None:
+def update_metadata_state(new_ts: datetime.datetime) -> None:
     """
     Update the Metadata table (row with id==1) so that its state field reflects the oldest changeset timestamp.
     For backwards replication, update only if the new timestamp is older than the current state.

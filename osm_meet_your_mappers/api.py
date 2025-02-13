@@ -237,7 +237,7 @@ async def get_mappers(
     try:
         with conn.cursor() as cur:
             query = """
-                SELECT name, COUNT(id) AS changeset_count, MIN(created_at) AS first_change, MAX(created_at) AS last_change
+                SELECT username, COUNT(id) AS changeset_count, MIN(created_at) AS first_change, MAX(created_at) AS last_change
                 FROM changesets
                 WHERE min_lon >= %s AND max_lon <= %s AND min_lat >= %s AND max_lat <= %s
                 GROUP BY username
