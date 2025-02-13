@@ -65,7 +65,7 @@ def parse_changeset(
 
     cs = {
         "id": cs_id,
-        "username": elem.attrib.get("username"),
+        "username": elem.attrib.get("user"),
         "uid": int(elem.attrib.get("uid", 0)),
         "created_at": created_at,
         "closed_at": parse_datetime(elem.attrib.get("closed_at")),

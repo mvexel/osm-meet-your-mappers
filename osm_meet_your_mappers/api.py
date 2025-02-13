@@ -10,15 +10,20 @@ The API supports:
 - Retrieving mapper statistics for a geographic area
 """
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from typing import Optional, List
-from datetime import datetime
-from pydantic import BaseModel
 import os
+from datetime import datetime
+from typing import List, Optional
+
+import requests
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
 from .db import get_db_connection
-from osm_meet_your_mappers.config import Config
+
+load_dotenv()
 
 
 class ChangesetResponse(BaseModel):
@@ -38,7 +43,7 @@ class ChangesetResponse(BaseModel):
 
 
 class MetadataResponse(BaseModel):
-    state: str
+    sequence: int
     timestamp: datetime
 
     class Config:
@@ -225,7 +230,7 @@ async def get_mappers(
         le=90,
     ),
     min_changesets: int = Query(
-        Config.MIN_CHANGESETS,
+        os.getenv("MIN_CHANGESETS"),
         description="Minimum number of changesets for a user",
         ge=1,
     ),
@@ -259,32 +264,10 @@ async def get_mappers(
         conn.close()
 
 
-@app.get(
-    "/metadata",
-    response_model=MetadataResponse,
-    summary="Get replication metadata state",
-    description="Returns the latest replication sequence (as stored in the Metadata table) and timestamp, indicating how far back data have been loaded.",
-)
-async def get_metadata():
-    """
-    Retrieve the replication metadata state from the database.
-    This shows the lowest replication sequence number processed and its timestamp.
-    """
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT state, timestamp FROM metadata WHERE id = 1")
-            row = cur.fetchone()
-            if row is None:
-                raise HTTPException(status_code=404, detail="Metadata not found")
-            return {"state": row[0], "timestamp": row[1]}
-    finally:
-        conn.close()
-
-
 def main():
     """CLI entry point that starts the uvicorn server"""
     import argparse
+
     import uvicorn
 
     parser = argparse.ArgumentParser(

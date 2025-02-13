@@ -277,8 +277,8 @@ function initializeMap() {
     // Extract bounds
     const bounds = layer.getBounds();
     if (
-      Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) > 1 ||
-      Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) > 1
+      Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) > 2 ||
+      Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) > 2
     ) {
       state.currentBbox = null;
       drawnItems.clearLayers();

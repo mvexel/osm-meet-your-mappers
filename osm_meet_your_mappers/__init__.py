@@ -1,12 +1,10 @@
 """OSM Changeset Loader package."""
 
-from .config import Config
 from .api import app
 from .db import get_db_connection, truncate_tables
 
 __version__ = "0.1.0"
 __all__ = [
-    "Config",
     "app",
     "get_db_connection",
     "truncate_tables",
