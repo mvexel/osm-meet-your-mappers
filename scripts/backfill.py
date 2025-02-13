@@ -321,17 +321,17 @@ def main() -> None:
 
         block_new_work = False
 
-            def process_single_file(s: int) -> Tuple[bool, Optional[datetime.datetime]]:
-                try:
-                    xml_bytes = download_with_retry(
-                        s, req_session, retries=3, initial_delay=2.0
-                    )
-                    return process_replication_content(
-                        xml_bytes, conn, int(os.getenv("BATCH_SIZE", 1000))
-                    )
-                except Exception as e:
-                    logging.error(f"Failed to process sequence {s}: {e}")
-                    return True, None
+        def process_single_file(s: int) -> Tuple[bool, Optional[datetime.datetime]]:
+            try:
+                xml_bytes = download_with_retry(
+                    s, req_session, retries=3, initial_delay=2.0
+                )
+                return process_replication_content(
+                    xml_bytes, int(os.getenv("BATCH_SIZE", 1000))
+                )
+            except Exception as e:
+                logging.error(f"Failed to process sequence {s}: {e}")
+                return True, None
 
             with ThreadPoolExecutor(
                 max_workers=int(os.getenv("BLOCK_SIZE", 10))
