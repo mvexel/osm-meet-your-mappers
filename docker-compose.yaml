@@ -5,10 +5,8 @@ services:
     image: ghcr.io/baosystems/postgis:17-3.5
     container_name: osm_mappers_db
     restart: always
-    environment:
-      POSTGRES_USER: osm_user
-      POSTGRES_PASSWORD: osm_pass
-      POSTGRES_DB: osm_db
+    env_file:
+      - .env
     volumes:
       - /tmp/postgres/data:/var/lib/postgresql/data
     healthcheck:
