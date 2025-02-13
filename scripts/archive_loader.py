@@ -11,7 +11,7 @@ from typing import Optional
 from lxml import etree
 from osm_meet_your_mappers.model import Changeset, ChangesetComment, ChangesetTag
 from osm_meet_your_mappers.config import Config
-from truncate_db import truncate_tables
+from osm_meet_your_mappers.db import truncate_tables
 from shapely.geometry import box
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
