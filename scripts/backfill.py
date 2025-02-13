@@ -20,7 +20,6 @@ from archive_loader import insert_batch
 insert_lock = threading.Lock()
 metadata_lock = threading.Lock()
 
-config = Config()
 
 
 def model_to_dict(instance) -> dict:
@@ -142,14 +141,14 @@ def process_replication_content(
     stream = io.BytesIO(xml_bytes)
     context = etree.iterparse(stream, events=("end",), tag="changeset")
     for _, elem in context:
-        cs_obj = Changeset.from_xml(elem)
-        if cs_obj and not cs_obj.open:  # only process closed changesets
-            cs_dict = model_to_dict(cs_obj)
-            cs_batch.append(cs_dict)
-            tag_batch.extend([model_to_dict(tag) for tag in cs_obj.tags])
-            comment_batch.extend(
-                [model_to_dict(comment) for comment in cs_obj.comments]
-            )
+        # Parse changeset XML directly without ORM
+        parsed = parse_changeset(elem, None, None)
+        if parsed:
+            cs, tags, comments = parsed
+            if not cs['open']:  # only process closed changesets
+                cs_batch.append(cs)
+                tag_batch.extend(tags)
+                comment_batch.extend(comments)
             processed += 1
 
             if len(cs_batch) >= batch_size:
@@ -224,34 +223,32 @@ def update_metadata_state(new_ts: datetime.datetime, SessionMaker: Any) -> None:
     with metadata_lock:
         session = SessionMaker()
         try:
-            row = session.query(Metadata).filter(Metadata.id == 1).first()
-            now = datetime.datetime.now(datetime.UTC)
-            if row is None:
-                # Explicitly set the id to 1 so that we update the same row in future calls.
-                row = Metadata(id=1, state=new_ts.isoformat(), timestamp=now)
-                session.add(row)
-                logging.debug(f"Inserted metadata state: {new_ts.isoformat()}")
-            else:
-                try:
-                    current_state_ts = datetime.datetime.fromisoformat(row.state)
-                except Exception:
-                    current_state_ts = None
-                # For backwards replication, update only if the new timestamp is older.
-                if current_state_ts is None or new_ts < current_state_ts:
-                    old_state = row.state
-                    row.state = new_ts.isoformat()
-                    row.timestamp = now
-                    logging.debug(
-                        f"Updated metadata state from {old_state} to {new_ts.isoformat()}"
+            with conn.cursor() as cur:
+                cur.execute("SELECT state FROM metadata WHERE id = 1")
+                row = cur.fetchone()
+                now = datetime.datetime.now(datetime.UTC)
+                if row is None:
+                    cur.execute(
+                        "INSERT INTO metadata (id, state, timestamp) VALUES (1, %s, %s)",
+                        (new_ts.isoformat(), now)
                     )
-            session.commit()
+                    logging.debug(f"Inserted metadata state: {new_ts.isoformat()}")
+                else:
+                    current_state_ts = datetime.datetime.fromisoformat(row[0])
+                    if new_ts < current_state_ts:
+                        cur.execute(
+                            "UPDATE metadata SET state = %s, timestamp = %s WHERE id = 1",
+                            (new_ts.isoformat(), now)
+                        )
+                        logging.debug(
+                            f"Updated metadata state from {row[0]} to {new_ts.isoformat()}"
+                        )
+                conn.commit()
         except Exception as e:
-            session.rollback()
+            conn.rollback()
             logging.error(
                 f"Failed to update metadata state for timestamp {new_ts.isoformat()}: {e}"
             )
-        finally:
-            session.close()
 
 
 def wait_for_db(engine, max_retries=30, delay=1):
@@ -260,7 +257,7 @@ def wait_for_db(engine, max_retries=30, delay=1):
     while retries < max_retries:
         try:
             with engine.connect() as conn:
-                conn.execute(select(1))
+                cur.execute("SELECT 1")
                 return True
         except Exception as e:
             logging.warning(
@@ -280,21 +277,12 @@ def main() -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
     )
 
-    engine = create_engine(
-        config.DB_URL,
-        poolclass=QueuePool,
-        pool_size=10,
-        max_overflow=20,
-        pool_timeout=30,
-        pool_pre_ping=True,
-    )
+    conn = get_db_connection()
 
     # Wait for database to become available
-    if not wait_for_db(engine):
+    if not wait_for_db(conn):
         logging.error("Failed to connect to database after multiple attempts. Exiting.")
         return
-
-    SessionMaker = sessionmaker(bind=engine)
     req_session = requests.Session()
 
     while True:
