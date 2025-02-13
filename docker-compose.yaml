@@ -22,7 +22,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: /bin/sh -c "psql -U $POSTGRES_USER -d $POSTGRES_DB -c 'CREATE EXTENSION IF NOT EXISTS postgis;' && /app/scripts/init_phase.sh"
+    command: /bin/sh -c "until pg_isready -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER; do echo waiting for postgres; sleep 2; done; psql -U $POSTGRES_USER -d $POSTGRES_DB -c 'CREATE EXTENSION IF NOT EXISTS postgis;' && /app/scripts/init_phase.sh"
 
   migrate:
     build: .
