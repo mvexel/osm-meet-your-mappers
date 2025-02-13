@@ -2,28 +2,30 @@
 
 _more detail to follow..._
 
-## Initial load of DB
+## Initialize the Database
 
-Grab a changesets or changesets+discussions archive from planet.osm.org. 
-
-Edit `docker-compose.yaml` to set the path to your PG data. This needs to have 100GB of space at least. 150 is better.
-
-```
-    volumes:
-      - /your/local/postgresql/data:/var/lib/postgresql/data
-```
-
-Then run the loader.
-
+To initialize the database and perform Alembic migrations, run the following command:
 
 ```bash
-> OSM_FILE_PATH=/your/path/to/discussions-250203.osm.bz2 LOADER_ARGS="--from_date=20200101" docker compose -f docker-compose.init.yaml up --build
+docker-compose -f docker-compose.init.yaml up --build
 ```
 
-wait a while.... (hours)
+This command will set up the database and apply the necessary migrations.
 
-## Run the app
+## Load with an Existing OSM.bz2 Archive File
+
+To load data from an existing OSM.bz2 archive file, use the following command:
 
 ```bash
-docker-compose up --build -d
+OSM_FILE_PATH=/your/path/to/your.osm.bz2 docker-compose -f docker-compose.load.yaml up --build
+```
+
+Replace `/your/path/to/your.osm.bz2` with the actual path to your OSM.bz2 file.
+
+## Run the App and the Backfill Loader
+
+To run the main application and the backfill loader, execute:
+
+```bash
+docker-compose -f docker-compose.run.yaml up --build
 ```
