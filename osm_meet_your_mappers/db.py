@@ -223,21 +223,3 @@ def truncate_tables(db_url=None, check_exist=True):
         raise
     finally:
         session.close()
-    if db_url is None:
-        db_url = Config().DB_URL
-    """
-    Drop and recreate the entire database, then create all tables.
-
-    WARNING: This will delete all existing data in the database!
-    """
-    engine = get_db_engine(db_url)
-
-    # Drop the database if it exists
-    if database_exists(db_url):
-        drop_database(db_url)
-
-    # Create the database
-    create_database(db_url)
-
-    # Create all tables defined in the Base metadata
-    Base.metadata.create_all(engine)
