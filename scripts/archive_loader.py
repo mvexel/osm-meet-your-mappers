@@ -10,16 +10,10 @@ from datetime import datetime
 from typing import Optional
 
 from lxml import etree
-from osm_meet_your_mappers.model import Changeset, ChangesetComment, ChangesetTag
-from osm_meet_your_mappers.config import Config
-from osm_meet_your_mappers.db import truncate_tables
-from shapely.geometry import box
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import QueuePool
+import psycopg2
+from psycopg2.extras import execute_batch
 
 NUM_WORKERS = 4
-config = Config()
 
 
 def valid_yyyymmdd(date_str):
