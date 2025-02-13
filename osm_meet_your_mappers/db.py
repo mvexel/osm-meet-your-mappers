@@ -3,7 +3,6 @@ Database convenience functions.
 """
 
 import logging
-import logging
 from typing import List, Optional
 from sqlalchemy import create_engine, and_, func, text
 from sqlalchemy.orm import Session
@@ -130,7 +129,7 @@ def get_mapper_statistics(
 def truncate_tables(check_exist=True):
     """
     Truncate all tables in the database.
-    
+
     Args:
         check_exist (bool): If True, check if tables exist before truncating
     """
@@ -139,7 +138,9 @@ def truncate_tables(check_exist=True):
         if check_exist:
             # Check if tables exist
             tables_exist = session.execute(
-                text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')")
+                text(
+                    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')"
+                )
             ).scalar()
             if not tables_exist:
                 logging.warning("Tables do not exist - skipping truncation")
@@ -185,7 +186,7 @@ def truncate_tables(check_exist=True):
 def truncate_tables(check_exist=True):
     """
     Truncate all tables in the database.
-    
+
     Args:
         check_exist (bool): If True, check if tables exist before truncating
     """
@@ -194,7 +195,9 @@ def truncate_tables(check_exist=True):
         if check_exist:
             # Check if tables exist
             tables_exist = session.execute(
-                text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')")
+                text(
+                    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')"
+                )
             ).scalar()
             if not tables_exist:
                 logging.warning("Tables do not exist - skipping truncation")
