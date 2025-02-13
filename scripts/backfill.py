@@ -191,8 +191,10 @@ def process_replication_content(
                             min_new_ts = batch_min
                         new_count = len(new_cs_batch)
                         new_changesets_in_file += new_count
+                        most_recent_closed_at = max(cs["created_at"] for cs in new_cs_batch)
                         logging.debug(
-                            f"Inserting batch of {new_count} new changesets (from {len(cs_batch)} closed changesets)"
+                            f"Inserting batch of {new_count} new changesets (from {len(cs_batch)} closed changesets). "
+                            f"Most recent closed_at: {most_recent_closed_at}, Sequence number: {new_cs_batch[-1]['id']}"
                         )
                         insert_batch(
                             conn, new_cs_batch, new_tag_batch, new_comment_batch
@@ -223,8 +225,10 @@ def process_replication_content(
                     min_new_ts = batch_min
                 new_count = len(new_cs_batch)
                 new_changesets_in_file += new_count
+                most_recent_closed_at = max(cs["created_at"] for cs in new_cs_batch)
                 logging.info(
-                    f"Inserting final batch of {new_count} new changesets (from {len(cs_batch)} closed changesets)"
+                    f"Inserting final batch of {new_count} new changesets (from {len(cs_batch)} closed changesets). "
+                    f"Most recent closed_at: {most_recent_closed_at}, Sequence number: {new_cs_batch[-1]['id']}"
                 )
                 insert_batch(conn, new_cs_batch, new_tag_batch, new_comment_batch)
     logging.debug(
