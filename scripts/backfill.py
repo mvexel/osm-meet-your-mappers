@@ -10,14 +10,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import datetime
 from typing import Any, List, Optional, Set, Tuple
 
+import psycopg2
 import requests
+from dotenv import load_dotenv
 import yaml
 from lxml import etree
-import psycopg2
-from osm_meet_your_mappers.db import get_db_connection
 from archive_loader import insert_batch, parse_changeset
 
-# Global locks to serialize duplicate checking/insertion and metadata updates.
+load_dotenv()
+
 insert_lock = threading.Lock()
 metadata_lock = threading.Lock()
 
@@ -278,7 +279,13 @@ def main() -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
     )
 
-    conn = get_db_connection()
+    conn = psycopg2.connect(
+        dbname=os.getenv("POSTGRES_DB"),
+        user=os.getenv("POSTGRES_USER"),
+        password=os.getenv("POSTGRES_PASSWORD"),
+        host=os.getenv("POSTGRES_HOST"),
+        port=os.getenv("POSTGRES_PORT"),
+    )
 
     # Wait for database to become available
     if not wait_for_db(conn):

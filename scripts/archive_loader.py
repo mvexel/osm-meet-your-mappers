@@ -4,13 +4,13 @@ import bz2
 import logging
 import os
 from datetime import datetime
-from dotenv import load_dotenv
 from typing import Optional
 
-from lxml import etree
-from shapely.geometry import box
 import psycopg2
+from dotenv import load_dotenv
+from lxml import etree
 from psycopg2.extras import execute_batch
+from shapely.geometry import box
 
 load_dotenv()
 
@@ -144,8 +144,7 @@ def process_changeset_file(
     Session,
     from_date,
     to_date,
-    batch_size=int(os.getenv("BATCH_SIZE", 1000)),
-    chunk_size=1024 * 1024 * 10,
+    batch_size,
 ):
     with bz2.open(filename, "rb") as f:
         cs_batch, tag_batch, comment_batch = [], [], []
@@ -192,7 +191,7 @@ def main():
     )
 
     changeset_file = os.getenv("CHANGESET_FILE")
-    batch_size = int(os.getenv("BATCH_SIZE", 1000))
+    batch_size = int(os.getenv("BATCH_SIZE", 50000))
     truncate = os.getenv("TRUNCATE", "true").lower() == "true"
     from_date = os.getenv("FROM_DATE")
     to_date = os.getenv("TO_DATE")
@@ -223,13 +222,9 @@ def main():
 
     from_date = datetime.strptime(from_date, "%Y%m%d").date() if from_date else None
     to_date = datetime.strptime(to_date, "%Y%m%d").date() if to_date else None
-    logging.info(
-        f"Going to process {changeset_file} from {from_date} to {to_date}"
-    )
+    logging.info(f"Going to process {changeset_file} from {from_date} to {to_date}")
 
-    process_changeset_file(
-        changeset_file, conn, from_date, to_date, batch_size=batch_size
-    )
+    process_changeset_file(changeset_file, conn, from_date, to_date, batch_size)
     conn.close()
 
 
