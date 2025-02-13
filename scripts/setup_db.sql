@@ -43,6 +43,6 @@ CREATE INDEX idx_changeset_comments_date ON changeset_comments(date);
 
 CREATE TABLE IF NOT EXISTS metadata (
     id SERIAL PRIMARY KEY,
-    state VARCHAR(255),
+    sequence INTEGER,
     timestamp TIMESTAMP
 );
