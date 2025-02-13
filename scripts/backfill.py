@@ -319,7 +319,7 @@ def main() -> None:
             )
         )
 
-            block_new_work = False
+        block_new_work = False
 
             def process_single_file(s: int) -> Tuple[bool, Optional[datetime.datetime]]:
                 try:
