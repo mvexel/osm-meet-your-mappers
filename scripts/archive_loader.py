@@ -3,9 +3,6 @@ import argparse
 import bz2
 import logging
 import os
-import io
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional
 
@@ -64,7 +61,7 @@ def parse_changeset(
 
     cs = {
         "id": cs_id,
-        "user": elem.attrib.get("user"),
+        "username": elem.attrib.get("username"),
         "uid": int(elem.attrib.get("uid", 0)),
         "created_at": created_at,
         "closed_at": parse_datetime(elem.attrib.get("closed_at")),
@@ -93,7 +90,7 @@ def parse_changeset(
                 {
                     "changeset_id": cs_id,
                     "uid": int(comment.attrib.get("uid", 0)),
-                    "user": comment.attrib.get("user"),
+                    "username": comment.attrib.get("username"),
                     "date": parse_datetime(comment.attrib.get("date")),
                     "text": comment.findtext("text"),
                 }
@@ -102,26 +99,36 @@ def parse_changeset(
     return cs, tags, comments
 
 
-
-
 def insert_batch(conn, cs_batch, tag_batch, comment_batch):
     try:
         with conn.cursor() as cur:
             if cs_batch:
-                execute_batch(cur, """
-                    INSERT INTO changesets (id, user, uid, created_at, closed_at, open, num_changes, comments_count, min_lat, min_lon, max_lat, max_lon, bbox)
-                    VALUES (%(id)s, %(user)s, %(uid)s, %(created_at)s, %(closed_at)s, %(open)s, %(num_changes)s, %(comments_count)s, %(min_lat)s, %(min_lon)s, %(max_lat)s, %(max_lon)s, %(bbox)s)
-                """, cs_batch)
+                execute_batch(
+                    cur,
+                    """
+                    INSERT INTO changesets (id, username, uid, created_at, closed_at, open, num_changes, comments_count, min_lat, min_lon, max_lat, max_lon, bbox)
+                    VALUES (%(id)s, %(username)s, %(uid)s, %(created_at)s, %(closed_at)s, %(open)s, %(num_changes)s, %(comments_count)s, %(min_lat)s, %(min_lon)s, %(max_lat)s, %(max_lon)s, %(bbox)s)
+                """,
+                    cs_batch,
+                )
             if tag_batch:
-                execute_batch(cur, """
+                execute_batch(
+                    cur,
+                    """
                     INSERT INTO changeset_tags (changeset_id, k, v)
                     VALUES (%(changeset_id)s, %(k)s, %(v)s)
-                """, tag_batch)
+                """,
+                    tag_batch,
+                )
             if comment_batch:
-                execute_batch(cur, """
-                    INSERT INTO changeset_comments (changeset_id, uid, user, date, text)
-                    VALUES (%(changeset_id)s, %(uid)s, %(user)s, %(date)s, %(text)s)
-                """, comment_batch)
+                execute_batch(
+                    cur,
+                    """
+                    INSERT INTO changeset_comments (changeset_id, uid, username, date, text)
+                    VALUES (%(changeset_id)s, %(uid)s, %(username)s, %(date)s, %(text)s)
+                """,
+                    comment_batch,
+                )
             conn.commit()
     except Exception as ex:
         conn.rollback()
@@ -134,7 +141,7 @@ def process_changeset_file(
     Session,
     from_date,
     to_date,
-    batch_size=int(os.getenv('BATCH_SIZE', 1000)),
+    batch_size=int(os.getenv("BATCH_SIZE", 1000)),
     chunk_size=1024 * 1024 * 10,
 ):
     with bz2.open(filename, "rb") as f:
@@ -186,13 +193,13 @@ def main():
     parser.add_argument(
         "db_url",
         nargs="?",
-        default=os.getenv('DB_URL', 'postgresql://user:pass@localhost/db'),
+        default=os.getenv("DB_URL", "postgresql://user:pass@localhost/db"),
         help="SQLAlchemy database URL (e.g. postgresql://user:pass@host/db)",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=int(os.getenv('BATCH_SIZE', 1000)),
+        default=int(os.getenv("BATCH_SIZE", 1000)),
         help="Batch size for bulk inserts",
     )
     parser.add_argument(
@@ -220,21 +227,25 @@ def main():
     )
 
     conn = psycopg2.connect(
-        dbname=os.getenv('POSTGRES_DB'),
-        user=os.getenv('POSTGRES_USER'),
-        password=os.getenv('POSTGRES_PASSWORD'),
-        host=os.getenv('POSTGRES_HOST'),
-        port=os.getenv('POSTGRES_PORT')
+        dbname=os.getenv("POSTGRES_DB"),
+        user=os.getenv("POSTGRES_USER"),
+        password=os.getenv("POSTGRES_PASSWORD"),
+        host=os.getenv("POSTGRES_HOST"),
+        port=os.getenv("POSTGRES_PORT"),
     )
 
     if args.truncate:
         with conn.cursor() as cur:
-            cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')")
+            cur.execute(
+                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')"
+            )
             tables_exist = cur.fetchone()[0]
             logging.info(f"Tables exist: {tables_exist}")
             if tables_exist:
                 logging.warning("Truncating existing tables")
-                cur.execute("TRUNCATE TABLE changesets, changeset_tags, changeset_comments CASCADE")
+                cur.execute(
+                    "TRUNCATE TABLE changesets, changeset_tags, changeset_comments CASCADE"
+                )
                 conn.commit()
             else:
                 logging.warning("Tables do not exist – ensure migration has been run.")

@@ -3,6 +3,7 @@ import argparse
 import gzip
 import io
 import logging
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,7 +20,6 @@ from archive_loader import insert_batch, parse_changeset
 # Global locks to serialize duplicate checking/insertion and metadata updates.
 insert_lock = threading.Lock()
 metadata_lock = threading.Lock()
-
 
 
 def model_to_dict(instance) -> dict:
@@ -145,7 +145,7 @@ def process_replication_content(
         parsed = parse_changeset(elem, None, None)
         if parsed:
             cs, tags, comments = parsed
-            if not cs['open']:  # only process closed changesets
+            if not cs["open"]:  # only process closed changesets
                 cs_batch.append(cs)
                 tag_batch.extend(tags)
                 comment_batch.extend(comments)
@@ -230,7 +230,7 @@ def update_metadata_state(new_ts: datetime.datetime, SessionMaker: Any) -> None:
                 if row is None:
                     cur.execute(
                         "INSERT INTO metadata (id, state, timestamp) VALUES (1, %s, %s)",
-                        (new_ts.isoformat(), now)
+                        (new_ts.isoformat(), now),
                     )
                     logging.debug(f"Inserted metadata state: {new_ts.isoformat()}")
                 else:
@@ -238,7 +238,7 @@ def update_metadata_state(new_ts: datetime.datetime, SessionMaker: Any) -> None:
                     if new_ts < current_state_ts:
                         cur.execute(
                             "UPDATE metadata SET state = %s, timestamp = %s WHERE id = 1",
-                            (new_ts.isoformat(), now)
+                            (new_ts.isoformat(), now),
                         )
                         logging.debug(
                             f"Updated metadata state from {row[0]} to {new_ts.isoformat()}"
@@ -291,16 +291,24 @@ def main() -> None:
             current_seq = get_current_sequence()
         except Exception as e:
             logging.error(f"Failed to fetch current replication sequence: {e}")
-            time.sleep(int(os.getenv('SLEEP_TIME', 60)))
+            time.sleep(int(os.getenv("SLEEP_TIME", 60)))
             continue
 
         work_done_overall = False
         seq = current_seq
         # Process replication files in descending order until we reach --min-seq.
-        while seq > int(os.getenv('MIN_SEQ', 0)):
+        while seq > int(os.getenv("MIN_SEQ", 0)):
             # Build a block of sequence numbers (in descending order).
             block = list(
-                range(seq, max(int(os.getenv('MIN_SEQ', 0)), seq - int(os.getenv('BLOCK_SIZE', 10))) - 1, -1)
+                range(
+                    seq,
+                    max(
+                        int(os.getenv("MIN_SEQ", 0)),
+                        seq - int(os.getenv("BLOCK_SIZE", 10)),
+                    )
+                    - 1,
+                    -1,
+                )
             )
             if not block:
                 break
@@ -313,13 +321,15 @@ def main() -> None:
                         s, req_session, retries=3, initial_delay=2.0
                     )
                     return process_replication_content(
-                        xml_bytes, conn, int(os.getenv('BATCH_SIZE', 1000))
+                        xml_bytes, conn, int(os.getenv("BATCH_SIZE", 1000))
                     )
                 except Exception as e:
                     logging.error(f"Failed to process sequence {s}: {e}")
                     return True, None
 
-            with ThreadPoolExecutor(max_workers=int(os.getenv('BLOCK_SIZE', 10))) as executor:
+            with ThreadPoolExecutor(
+                max_workers=int(os.getenv("BLOCK_SIZE", 10))
+            ) as executor:
                 futures = {executor.submit(process_single_file, s): s for s in block}
                 for future in as_completed(futures):
                     s = futures[future]
@@ -349,7 +359,7 @@ def main() -> None:
             logging.info(
                 f"No new replication work found. Sleeping for {int(os.getenv('SLEEP_TIME', 60))} seconds..."
             )
-            time.sleep(int(os.getenv('SLEEP_TIME', 60)))
+            time.sleep(int(os.getenv("SLEEP_TIME", 60)))
         else:
             logging.info(
                 "Finished processing current backfill block. Checking for more work shortly..."

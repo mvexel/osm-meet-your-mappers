@@ -2,16 +2,14 @@
 
 from .config import Config
 from .api import app
-from .db import get_db_engine, get_db_session, create_tables
-from .model import Changeset, Metadata
+from .db import get_db_connection, truncate_tables
 
 __version__ = "0.1.0"
 __all__ = [
     "Config",
     "app",
-    "get_db_engine",
-    "get_db_session",
-    "create_tables",
+    "get_db_connection",
+    "truncate_tables",
     "Changeset",
     "Metadata",
 ]

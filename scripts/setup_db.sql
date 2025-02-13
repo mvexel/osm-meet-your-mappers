@@ -1,6 +1,6 @@
-CREATE TABLE changesets (
+CREATE TABLE IF NOT EXISTS changesets (
     id SERIAL PRIMARY KEY,
-    user VARCHAR(255),
+    username VARCHAR(255),
     uid INTEGER,
     created_at TIMESTAMP,
     closed_at TIMESTAMP,
@@ -14,23 +14,34 @@ CREATE TABLE changesets (
     bbox GEOMETRY
 );
 
-CREATE TABLE changeset_tags (
+CREATE INDEX IF NOT EXISTS idx_changesets_bbox_username ON changesets USING GIST (bbox, username);
+CREATE INDEX IF NOT EXISTS idx_changesets_geom ON changesets USING GIST(bbox);
+
+CREATE TABLE IF NOT EXISTS changeset_tags (
     id SERIAL PRIMARY KEY,
     changeset_id INTEGER REFERENCES changesets(id) ON DELETE CASCADE,
     k VARCHAR(255),
     v VARCHAR(255)
 );
 
-CREATE TABLE changeset_comments (
+CREATE INDEX idx_changeset_tags_changeset_id ON changeset_tags(changeset_id);
+CREATE INDEX idx_changeset_tags_changeset_id_k ON changeset_tags(changeset_id, k);
+
+
+CREATE TABLE IF NOT EXISTS changeset_comments (
     id SERIAL PRIMARY KEY,
     changeset_id INTEGER REFERENCES changesets(id) ON DELETE CASCADE,
     uid INTEGER,
-    user VARCHAR(255),
+    username VARCHAR(255),
     date TIMESTAMP,
     text TEXT
 );
 
-CREATE TABLE metadata (
+CREATE INDEX idx_changeset_comments_changeset_id ON changeset_comments(changeset_id);
+CREATE INDEX idx_changeset_comments_uid ON changeset_comments(uid);
+CREATE INDEX idx_changeset_comments_date ON changeset_comments(date);
+
+CREATE TABLE IF NOT EXISTS metadata (
     id SERIAL PRIMARY KEY,
     state VARCHAR(255),
     timestamp TIMESTAMP

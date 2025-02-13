@@ -25,7 +25,7 @@ class ChangesetResponse(BaseModel):
     id: int
     created_at: datetime
     closed_at: Optional[datetime]
-    user: str
+    username: str
     uid: int
     min_lon: float
     min_lat: float
@@ -105,7 +105,7 @@ async def get_changesets(
         ge=-90,
         le=90,
     ),
-    user: Optional[str] = Query(
+    username: Optional[str] = Query(
         None,
         description="Filter by OpenStreetMap username",
         example="JohnDoe",
@@ -137,25 +137,45 @@ async def get_changesets(
     try:
         with conn.cursor() as cur:
             query = """
-                SELECT id, created_at, closed_at, user, uid, min_lon, min_lat, max_lon, max_lat, open
+                SELECT id, created_at, closed_at, username, uid, min_lon, min_lat, max_lon, max_lat, open
                 FROM changesets
                 WHERE (%s IS NULL OR min_lon >= %s)
                   AND (%s IS NULL OR max_lon <= %s)
                   AND (%s IS NULL OR min_lat >= %s)
                   AND (%s IS NULL OR max_lat <= %s)
-                  AND (%s IS NULL OR user = %s)
+                  AND (%s IS NULL OR username = %s)
                   AND (%s IS NULL OR created_at >= %s)
                   AND (%s IS NULL OR created_at <= %s)
                 LIMIT %s OFFSET %s
             """
-            cur.execute(query, (min_lon, min_lon, max_lon, max_lon, min_lat, min_lat, max_lat, max_lat, user, user, created_after, created_after, created_before, created_before, limit, offset))
+            cur.execute(
+                query,
+                (
+                    min_lon,
+                    min_lon,
+                    max_lon,
+                    max_lon,
+                    min_lat,
+                    min_lat,
+                    max_lat,
+                    max_lat,
+                    username,
+                    username,
+                    created_after,
+                    created_after,
+                    created_before,
+                    created_before,
+                    limit,
+                    offset,
+                ),
+            )
             results = cur.fetchall()
             return [
                 {
                     "id": row[0],
                     "created_at": row[1],
                     "closed_at": row[2],
-                    "user": row[3],
+                    "username": row[3],
                     "uid": row[4],
                     "min_lon": row[5],
                     "min_lat": row[6],
@@ -217,10 +237,10 @@ async def get_mappers(
     try:
         with conn.cursor() as cur:
             query = """
-                SELECT user, COUNT(id) AS changeset_count, MIN(created_at) AS first_change, MAX(created_at) AS last_change
+                SELECT name, COUNT(id) AS changeset_count, MIN(created_at) AS first_change, MAX(created_at) AS last_change
                 FROM changesets
                 WHERE min_lon >= %s AND max_lon <= %s AND min_lat >= %s AND max_lat <= %s
-                GROUP BY user
+                GROUP BY username
                 HAVING COUNT(id) >= %s
                 ORDER BY changeset_count DESC
             """
@@ -228,7 +248,7 @@ async def get_mappers(
             results = cur.fetchall()
             return [
                 {
-                    "user": row[0],
+                    "username": row[0],
                     "changeset_count": row[1],
                     "first_change": row[2].isoformat(),
                     "last_change": row[3].isoformat(),
@@ -271,30 +291,19 @@ def main():
         description="OSM Meet Your Mappers - A tool to explore OpenStreetMap mapping activity"
     )
     parser.add_argument(
-        "--host",
-        default="0.0.0.0",
-        help="Host interface to bind to (default: 0.0.0.0)"
+        "--host", default="0.0.0.0", help="Host interface to bind to (default: 0.0.0.0)"
     )
     parser.add_argument(
-        "--port",
-        type=int,
-        default=8000,
-        help="Port to listen on (default: 8000)"
+        "--port", type=int, default=8000, help="Port to listen on (default: 8000)"
     )
     parser.add_argument(
-        "--reload",
-        action="store_true",
-        help="Enable auto-reload on code changes"
+        "--reload", action="store_true", help="Enable auto-reload on code changes"
     )
 
     args = parser.parse_args()
-    
-    uvicorn.run(
-        app,
-        host=args.host,
-        port=args.port,
-        reload=args.reload
-    )
+
+    uvicorn.run(app, host=args.host, port=args.port, reload=args.reload)
+
 
 if __name__ == "__main__":
     main()
