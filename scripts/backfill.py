@@ -245,51 +245,49 @@ def process_replication_content(
     return file_empty, min_new_ts
 
 
-def update_oldest_sequence(seq: int) -> None:
+def update_metadata(current_tip: int, last_processed: int) -> None:
     """
-    Update the metadata table with the given sequence number.
+    Update the metadata table with the current tip and last processed sequence numbers.
     """
     with metadata_lock:
         try:
             with conn.cursor() as cur:
-                cur.execute("SELECT sequence FROM metadata WHERE id = 1")
+                cur.execute("SELECT id FROM metadata WHERE id = 1")
                 row = cur.fetchone()
                 now = datetime.datetime.now(datetime.UTC)
                 if row is None:
                     cur.execute(
-                        "INSERT INTO metadata (id, sequence, timestamp) VALUES (1, %s, %s)",
-                        (seq, now),
+                        "INSERT INTO metadata (id, current_tip, last_processed, timestamp) VALUES (1, %s, %s, %s)",
+                        (current_tip, last_processed, now),
                     )
                     logging.debug(
-                        f"[{threading.current_thread().name}] Inserted metadata sequence: {seq}"
+                        f"[{threading.current_thread().name}] Inserted metadata: current_tip={current_tip}, last_processed={last_processed}"
                     )
                 else:
-                    current_sequence = row[0]
-                    if seq < current_sequence:
-                        cur.execute(
-                            "UPDATE metadata SET sequence = %s, timestamp = %s WHERE id = 1",
-                            (seq, now),
-                        )
-                        logging.debug(
-                            f"[{threading.current_thread().name}] Updated metadata sequence from {current_sequence} to {seq}"
-                        )
+                    cur.execute(
+                        "UPDATE metadata SET current_tip = %s, last_processed = %s, timestamp = %s WHERE id = 1",
+                        (current_tip, last_processed, now),
+                    )
+                    logging.debug(
+                        f"[{threading.current_thread().name}] Updated metadata: current_tip={current_tip}, last_processed={last_processed}"
+                    )
                 conn.commit()
         except Exception as e:
             conn.rollback()
             logging.error(
-                f"[{threading.current_thread().name}] Failed to update metadata sequence for sequence {seq}: {e}"
+                f"[{threading.current_thread().name}] Failed to update metadata: {e}"
             )
 
 
-def get_stored_oldest_sequence() -> Optional[int]:
+def get_stored_metadata() -> Tuple[Optional[int], Optional[int]]:
     """
-    Return the oldest sequence number we have stored in metadata.
+    Return the current tip and last processed sequence numbers from metadata.
     """
     with metadata_lock:
         with conn.cursor() as cur:
-            cur.execute("SELECT sequence FROM metadata WHERE id = 1")
+            cur.execute("SELECT current_tip, last_processed FROM metadata WHERE id = 1")
             row = cur.fetchone()
-            return row[0] if row else None
+            return row if row else (None, None)
 
 
 def wait_for_db(conn, max_retries=30, delay=1):
@@ -395,50 +393,56 @@ def backfill_worker(start_seq: int) -> None:
 
 def catch_up_worker() -> None:
     """
-    Worker that polls for the current remote sequence and works backward
-    until encountering a block that produces only duplicates, then sleeps before polling again.
+    Worker that polls for the current remote sequence and processes new changesets,
+    filling gaps when necessary.
     """
     block_size = int(os.getenv("BLOCK_SIZE", 10))
     batch_size = int(os.getenv("BATCH_SIZE", 1000))
     req_session = requests.Session()
 
     while True:
-        current_seq = get_current_sequence()
-        stored_seq = get_stored_oldest_sequence()
+        current_remote_seq = get_current_sequence()
+        stored_tip, last_processed = get_stored_metadata()
         
-        if stored_seq is None:
-            stored_seq = current_seq
-            update_oldest_sequence(current_seq)
+        if stored_tip is None:
+            stored_tip = current_remote_seq
+            last_processed = current_remote_seq
+            update_metadata(stored_tip, last_processed)
         
         logging.debug(
-            f"[{threading.current_thread().name}] Current remote sequence: {current_seq}, Stored sequence: {stored_seq}"
+            f"[{threading.current_thread().name}] Current remote sequence: {current_remote_seq}, "
+            f"Stored tip: {stored_tip}, Last processed: {last_processed}"
         )
         
-        # Process from current_seq down to stored_seq
-        seq = current_seq
-        while seq > stored_seq:
-            block = list(range(seq, max(stored_seq, seq - block_size), -1))
-            logging.debug(
-                f"[{threading.current_thread().name}] Processing block from {block[0]} down to {block[-1]}"
-            )
-            # Specify the pool name as "Catch-up" so these threads are named accordingly.
-            all_duplicates, _ = process_block(
-                block, req_session, batch_size, pool_name="Catch-up"
-            )
-            if all_duplicates and seq <= stored_seq:
+        # Process new changesets
+        if current_remote_seq > stored_tip:
+            seq = current_remote_seq
+            while seq > stored_tip:
+                block = list(range(seq, max(stored_tip, seq - block_size), -1))
                 logging.debug(
-                    f"[{threading.current_thread().name}] Block produced only duplicates and we've reached stored sequence, stopping descent."
+                    f"[{threading.current_thread().name}] Processing new block from {block[0]} down to {block[-1]}"
                 )
-                break
-            seq = block[-1] - 1
-            update_oldest_sequence(seq)
+                process_block(block, req_session, batch_size, pool_name="Catch-up")
+                seq = block[-1] - 1
+            update_metadata(current_remote_seq, seq)
+            stored_tip, last_processed = current_remote_seq, seq
+        
+        # Fill gaps
+        if last_processed < stored_tip:
+            seq = stored_tip
+            while seq > last_processed:
+                block = list(range(seq, max(last_processed, seq - block_size), -1))
+                logging.debug(
+                    f"[{threading.current_thread().name}] Filling gap from {block[0]} down to {block[-1]}"
+                )
+                process_block(block, req_session, batch_size, pool_name="Gap-fill")
+                seq = block[-1] - 1
+            update_metadata(stored_tip, seq)
         
         logging.info(
-            f"[{threading.current_thread().name}] Completed a pass from current sequence to stored sequence. Sleeping before next poll..."
+            f"[{threading.current_thread().name}] Completed a pass. Sleeping before next poll..."
         )
-        time.sleep(
-            int(os.getenv("SLEEP_TIME", 300))
-        )  # Sleep 5 minutes before checking again
+        time.sleep(int(os.getenv("SLEEP_TIME", 300)))  # Sleep 5 minutes before checking again
 
 
 def main() -> None:
