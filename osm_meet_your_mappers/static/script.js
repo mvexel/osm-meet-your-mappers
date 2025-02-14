@@ -280,8 +280,8 @@ function initializeMap() {
     const sw = bounds.getSouthWest().wrap();
     const ne = bounds.getNorthEast().wrap();
     if (
-      Math.abs(bounds.ne.lng - sw.lng) > 2 ||
-      Math.abs(ne.lat - sw.wrap().lat) > 2
+      Math.abs(bounds.ne.lng - sw.lng) > CONFIG.MAX_BOX_DEGREES ||
+      Math.abs(ne.lat - sw.wrap().lat) > CONFIG.MAX_BOX_DEGREES
     ) {
       state.currentBbox = null;
       drawnItems.clearLayers();
