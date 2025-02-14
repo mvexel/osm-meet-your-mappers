@@ -365,14 +365,14 @@ def backfill_worker(start_seq: int) -> None:
     """
     Worker that backfills from the stored oldest sequence down to START_SEQUENCE.
     """
-    stored_oldest = get_stored_oldest_sequence()
-    if stored_oldest is None:
+    stored_tip, last_processed = get_stored_metadata()
+    if stored_tip is None or last_processed is None:
         logging.info(
-            f"[{threading.current_thread().name}] No stored oldest sequence found, nothing to backfill."
+            f"[{threading.current_thread().name}] No stored metadata found, nothing to backfill."
         )
         return
 
-    seq = stored_oldest
+    seq = last_processed
     block_size = int(os.getenv("BLOCK_SIZE", 10))
     batch_size = int(os.getenv("BATCH_SIZE", 1000))
     req_session = requests.Session()
@@ -385,7 +385,7 @@ def backfill_worker(start_seq: int) -> None:
         # Specify the pool name as "Backfill" so threads in this pool are clearly identified.
         _, _ = process_block(block, req_session, batch_size, pool_name="Backfill")
         seq = block[-1] - 1
-        update_oldest_sequence(seq)
+        update_metadata(stored_tip, seq)
     logging.info(
         f"[{threading.current_thread().name}] Backfill worker reached START_SEQUENCE."
     )
@@ -458,9 +458,10 @@ def main() -> None:
     start_seq = int(os.getenv("START_SEQUENCE", 0))
 
     # If no metadata is stored yet, initialize it with the current remote sequence.
-    if get_stored_oldest_sequence() is None:
+    stored_tip, last_processed = get_stored_metadata()
+    if stored_tip is None or last_processed is None:
         current_seq = get_current_sequence()
-        update_oldest_sequence(current_seq)
+        update_metadata(current_seq, current_seq)
 
     # Spawn the two worker threads with explicit names.
     t_backfill = threading.Thread(
