@@ -404,12 +404,20 @@ def catch_up_worker() -> None:
 
     while True:
         current_seq = get_current_sequence()
+        stored_seq = get_stored_oldest_sequence()
+        
+        if stored_seq is None:
+            stored_seq = current_seq
+            update_oldest_sequence(current_seq)
+        
         logging.debug(
-            f"[{threading.current_thread().name}] Current remote sequence: {current_seq}"
+            f"[{threading.current_thread().name}] Current remote sequence: {current_seq}, Stored sequence: {stored_seq}"
         )
+        
+        # Process from current_seq down to stored_seq
         seq = current_seq
-        while seq > 0:
-            block = list(range(seq, seq - block_size, -1))
+        while seq > stored_seq:
+            block = list(range(seq, max(stored_seq, seq - block_size), -1))
             logging.debug(
                 f"[{threading.current_thread().name}] Processing block from {block[0]} down to {block[-1]}"
             )
@@ -417,16 +425,16 @@ def catch_up_worker() -> None:
             all_duplicates, _ = process_block(
                 block, req_session, batch_size, pool_name="Catch-up"
             )
-            if all_duplicates:
+            if all_duplicates and seq <= stored_seq:
                 logging.debug(
-                    f"[{threading.current_thread().name}] Block produced only duplicates, stopping descent."
+                    f"[{threading.current_thread().name}] Block produced only duplicates and we've reached stored sequence, stopping descent."
                 )
                 break
             seq = block[-1] - 1
-            if seq <= 0:
-                break
+            update_oldest_sequence(seq)
+        
         logging.info(
-            f"[{threading.current_thread().name}] Completed a pass from current sequence. Sleeping before next poll..."
+            f"[{threading.current_thread().name}] Completed a pass from current sequence to stored sequence. Sleeping before next poll..."
         )
         time.sleep(
             int(os.getenv("SLEEP_TIME", 300))
