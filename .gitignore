@@ -7,4 +7,3 @@ node_modules/
 *.egg-info
 .DS_Store
 .env
-.env
