@@ -22,11 +22,11 @@ def get_duplicate_ids(conn, cs_list: List[dict]) -> Set[int]:
 
 import requests
 import yaml
-from archive_loader import insert_batch, parse_changeset
+from scripts.archive_loader import insert_batch, parse_changeset
 from dotenv import load_dotenv
 from lxml import etree
 
-from osm_meet_your_mappers.db import get_db_connection
+from db import get_db_connection
 
 load_dotenv()
 
