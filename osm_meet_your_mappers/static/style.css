@@ -21,19 +21,44 @@ th:hover {
 
 #map {
   flex: 1;
-  min-height: 400px;
+  min-height: 300px;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  #map {
+    min-height: 400px;
+  }
 }
 
 #mapContainer {
   display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 768px) {
+  #mapContainer {
+    flex-direction: row;
+  }
 }
 
 .sidebar {
   display: flex;
-  flex-direction: column;
-  width: 200px;
-  gap: 1rem;
-  margin-right: 1rem;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .sidebar {
+    flex-direction: column;
+    width: 200px;
+    gap: 1rem;
+    margin-right: 1rem;
+    margin-bottom: 0;
+  }
 }
 
 .sidebar button {
