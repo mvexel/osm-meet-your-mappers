@@ -279,8 +279,9 @@ function initializeMap() {
     const bounds = layer.getBounds();
     const sw = bounds.getSouthWest().wrap();
     const ne = bounds.getNorthEast().wrap();
+    console.log(sw, ne);
     if (
-      Math.abs(bounds.ne.lng - sw.lng) > CONFIG.MAX_BOX_DEGREES ||
+      Math.abs(ne.lng - sw.lng) > CONFIG.MAX_BOX_DEGREES ||
       Math.abs(ne.lat - sw.wrap().lat) > CONFIG.MAX_BOX_DEGREES
     ) {
       state.currentBbox = null;
