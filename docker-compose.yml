@@ -22,10 +22,14 @@ services:
 
   backfill:
     build: .
-    command: python scripts/backfill.py
+    working_dir: /app
+    command: python -m scripts.backfill
     volumes:
       - .:/app
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     env_file:
       - .env
+    environment:
+      - PYTHONPATH=/app
