@@ -6,6 +6,8 @@ const CONFIG = {
   DATE_SORT_DESC: true, // whether to sort the table by date descending
   MAX_TABLE_ROWS: 100, // max number of rows to display (all will always be available in CSV)
   MAX_BOX_DEGREES: 1, // max allowed size on each side for the user drawn bbox
+  INITIAL_STATUS:
+    "Welcome! Draw a box on the map and click 'Meet Your Mappers' to get started.",
 };
 
 const state = {
@@ -361,5 +363,5 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeSidebarButtons();
   elements.meetMappers.addEventListener("click", handleMeetMappers);
   elements.export.button.addEventListener("click", dataHandler.exportToCsv);
-  updateStatus("Welcome!");
+  updateStatus(CONFIG.INITIAL_STATUS);
 });
