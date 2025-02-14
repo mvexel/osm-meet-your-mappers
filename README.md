@@ -22,3 +22,14 @@ This builds and launches 3 docker images:
 -  `osm-changeset-loader-api-1`: this exposes the FastAPI application as well as the static web site on port 8000.
 
 If you want to run this on a public server, you will need to set up Caddy or nginx or similar to put a reverse proxy in front.
+
+## Upgrade
+
+If you want to upgrade the application, pull the latest from Github and rebuild the images:
+
+```
+git pull
+docker compose down -v
+docker compose build --no-cache
+docker compose up -d
+```
