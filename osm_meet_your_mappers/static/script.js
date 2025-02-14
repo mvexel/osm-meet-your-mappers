@@ -3,8 +3,9 @@
 // ================================
 
 const CONFIG = {
-  DATE_SORT_DEFAULT: true,
-  MAX_TABLE_ROWS: 100,
+  DATE_SORT_DESC: true, // whether to sort the table by date descending
+  MAX_TABLE_ROWS: 100, // max number of rows to display (all will always be available in CSV)
+  MAX_BOX_DEGREES: 1, // max allowed size on each side for the user drawn bbox
 };
 
 const state = {
@@ -185,7 +186,7 @@ const dataHandler = {
       elements.results.appendChild(notice);
     }
 
-    new Tablesort(table, { descending: CONFIG.DATE_SORT_DEFAULT });
+    new Tablesort(table, { descending: CONFIG.DATE_SORT_DESC });
   },
 
   exportToCsv() {
@@ -276,19 +277,21 @@ function initializeMap() {
 
     // Extract bounds
     const bounds = layer.getBounds();
+    const sw = bounds.getSouthWest().wrap();
+    const ne = bounds.getNorthEast().wrap();
     if (
-      Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) > 2 ||
-      Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) > 2
+      Math.abs(bounds.ne.lng - sw.lng) > 2 ||
+      Math.abs(ne.lat - sw.wrap().lat) > 2
     ) {
       state.currentBbox = null;
       drawnItems.clearLayers();
       updateStatus("Box is too huge, try something smaller.");
     } else {
       state.currentBbox = {
-        minLat: bounds.getSouthWest().lat,
-        minLon: bounds.getSouthWest().lng,
-        maxLat: bounds.getNorthEast().lat,
-        maxLon: bounds.getNorthEast().lng,
+        minLat: sw.lat,
+        minLon: sw.lng,
+        maxLat: ne.lat,
+        maxLon: ne.lng,
       };
 
       elements.meetMappers.disabled = false;
