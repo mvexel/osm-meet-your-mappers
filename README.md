@@ -1,6 +1,6 @@
 # Meet Your Mappers
 
-_more detail to follow..._
+A web site that lets mappers find their local mapping friends.
 
 ## Configure
 
