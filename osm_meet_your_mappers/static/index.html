@@ -21,23 +21,16 @@
             <p><small><a href="/static/about.html">About this website + help</a></small></p>
         </hgroup>
 
-        <!-- Status message box -->
         <div class="status-message" role="status"></div>
 
-        <!-- Container for sidebar and map -->
         <div id="mapContainer">
-
-            <!-- Map element -->
             <div id="map"></div>
-
-            <div class="sidebar">
-                <!-- Desktop-only zoom controls -->
+            <aside class="sidebar">
                 <div class="zoom-controls">
                     <button class="secondary" id="zoomIn">Zoom In</button>
                     <button class="secondary" id="zoomOut">Zoom Out</button>
                 </div>
                 
-                <!-- Main controls -->
                 <div class="button-group">
                     <div class="button-row">
                         <button id="drawRect">Draw Rectangle</button>
@@ -46,11 +39,10 @@
                     <button id="meetMappers" class="submit-button contrast" disabled>Meet My Mappers</button>
                 </div>
 
-                <!-- "Progress bar" -->
                 <div class="progress-indicator" role="progressbar" aria-hidden="true" style="visibility: hidden;">
                     <progress></progress>
                 </div>
-            </div>
+            </aside>
         </div>
 
         <!-- Space for the table to go -->
