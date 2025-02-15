@@ -52,22 +52,29 @@ const utils = {
   },
 };
 
-// Helper function to return friendly date strings
-function friendlyDate(date) {
+function friendlyDate(utcInput) {
+  let date;
+  if (typeof utcInput === "string") {
+    const utcString = utcInput.endsWith("Z") ? utcInput : utcInput + "Z";
+    date = new Date(utcString);
+  } else if (utcInput instanceof Date) {
+    date = utcInput;
+  } else {
+    throw new Error("Invalid date input; expected a string or Date object.");
+  }
+
   const now = new Date();
   const oneDay = 24 * 60 * 60 * 1000;
   const optionsTime = { hour: "2-digit", minute: "2-digit" };
 
-  // If the date is today, compare their date strings
+  // If the date is today (in local time)
   if (now.toDateString() === date.toDateString()) {
     return `Today at ${date.toLocaleTimeString(undefined, optionsTime)}`;
   }
-  // Check if the date is yesterday by subtracting one day
   const yesterday = new Date(now.getTime() - oneDay);
   if (yesterday.toDateString() === date.toDateString()) {
     return `Yesterday at ${date.toLocaleTimeString(undefined, optionsTime)}`;
   }
-  // Otherwise, return a standard formatted date and time
   return (
     date.toLocaleDateString(undefined, {
       year: "numeric",
@@ -281,7 +288,6 @@ function initializeMap() {
     const bounds = layer.getBounds();
     const sw = bounds.getSouthWest().wrap();
     const ne = bounds.getNorthEast().wrap();
-    console.log(sw, ne);
     if (
       Math.abs(ne.lng - sw.lng) > CONFIG.MAX_BOX_DEGREES ||
       Math.abs(ne.lat - sw.wrap().lat) > CONFIG.MAX_BOX_DEGREES
@@ -322,11 +328,14 @@ function initializeSidebarButtons() {
     drawRectangle.enable();
   });
 
-  // clears any drawn layers and resets state
+  // clears any drawn layers, results table, and resets state
   elements.discardDraw.addEventListener("click", () => {
     drawnItems.clearLayers();
+    elements.results.innerHTML = "";
+    elements.export.container.style.display = "none";
     updateStatus("Please draw a box on the map!");
     state.currentBbox = null;
+    state.currentData = null;
     elements.meetMappers.disabled = true;
   });
 }

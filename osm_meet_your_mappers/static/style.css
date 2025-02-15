@@ -1,43 +1,96 @@
-.action-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
+/* Base styles */
 table {
   width: 100%;
   border-collapse: collapse;
 }
 
-#progressBar {
-  display: none;
+th {
+  cursor: pointer;
 }
 
 th:hover {
-  cursor: pointer;
   text-decoration: underline;
 }
 
+/* Map and container styles */
 #map {
   flex: 1;
-  min-height: 400px;
+  min-height: 300px;
+  width: 100%;
 }
 
 #mapContainer {
   display: flex;
+  flex-direction: column;
 }
 
+/* Sidebar and button styles */
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: 200px;
   gap: 1rem;
-  margin-right: 1rem;
+  margin-top: 1rem;
+  width: 100%;
 }
 
+.zoom-controls {
+  display: none;
+}
+
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.button-row button {
+  flex: 1;
+}
+
+#meetMappers {
+  width: 100%;
+}
+
+/* Desktop styles */
+@media (min-width: 768px) {
+  #map {
+    min-height: 400px;
+  }
+  
+  #mapContainer {
+    flex-direction: row;
+    gap: 2rem;
+  }
+  
+  .sidebar {
+    width: 200px;
+    margin: 0;
+  }
+  
+  .zoom-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .button-row {
+    flex-direction: column;
+  }
+  
+  .button-row button {
+    width: 100%;
+  }
+}
+
+/* Button animations */
 .sidebar button {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .sidebar button:hover {
@@ -49,34 +102,25 @@ th:hover {
   transform: scale(0.95);
 }
 
+/* Status message */
 .status-message {
-  margin-top: 1rem;
-  margin-bottom: 1rem;
+  margin: 1rem 0;
   padding: 0.75rem;
-  /* height: 150px; */
   border-radius: 4px;
   font-weight: bold;
   background-color: #e0f7fa;
   color: #00796b;
   text-align: center;
-  transition: background-color 0.3s ease, transform 0.3s ease;
+  transition: all 0.3s ease;
+}
+
+/* Animation */
+@keyframes flashAnim {
+  0% { background-color: #ffeb3b; transform: scale(1.05); }
+  50% { background-color: #fffde7; transform: scale(1); }
+  100% { background-color: #e0f7fa; transform: scale(1); }
 }
 
 .status-message.flash {
   animation: flashAnim 1s ease;
-}
-
-@keyframes flashAnim {
-  0% {
-    background-color: #ffeb3b;
-    transform: scale(1.05);
-  }
-  50% {
-    background-color: #fffde7;
-    transform: scale(1);
-  }
-  100% {
-    background-color: #e0f7fa;
-    transform: scale(1);
-  }
 }
