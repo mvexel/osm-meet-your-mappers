@@ -39,6 +39,7 @@ th:hover {
 @media (min-width: 768px) {
   #mapContainer {
     flex-direction: row;
+    gap: 2rem;
   }
 }
 
