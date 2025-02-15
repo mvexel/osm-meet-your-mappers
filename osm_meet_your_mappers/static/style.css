@@ -44,11 +44,20 @@ th:hover {
 
 .sidebar {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-top: 1rem;
   width: 100%;
+}
+
+/* Hide zoom buttons on mobile */
+#zoomIn, #zoomOut {
+  display: none;
+}
+
+/* Show main action buttons in a row */
+#drawRect, #discardDraw, #meetMappers {
+  margin: 0.25rem;
 }
 
 @media (min-width: 768px) {
@@ -57,7 +66,13 @@ th:hover {
     width: 200px;
     gap: 1rem;
     margin-right: 1rem;
+    margin-top: 0;
     margin-bottom: 0;
+  }
+  
+  /* Show zoom buttons on desktop */
+  #zoomIn, #zoomOut {
+    display: block;
   }
 }
 

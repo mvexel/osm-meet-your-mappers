@@ -322,11 +322,14 @@ function initializeSidebarButtons() {
     drawRectangle.enable();
   });
 
-  // clears any drawn layers and resets state
+  // clears any drawn layers, results table, and resets state
   elements.discardDraw.addEventListener("click", () => {
     drawnItems.clearLayers();
+    elements.results.innerHTML = "";
+    elements.export.container.style.display = "none";
     updateStatus("Please draw a box on the map!");
     state.currentBbox = null;
+    state.currentData = null;
     elements.meetMappers.disabled = true;
   });
 }
