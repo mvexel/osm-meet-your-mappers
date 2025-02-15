@@ -45,19 +45,33 @@ th:hover {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 1rem;
   margin-top: 1rem;
   width: 100%;
 }
 
-/* Hide zoom buttons on mobile */
-#zoomIn, #zoomOut {
+.zoom-controls {
   display: none;
 }
 
-/* Show main action buttons in a row */
-#drawRect, #discardDraw, #meetMappers {
-  margin: 0.25rem;
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.button-row button {
+  flex: 1;
+}
+
+#meetMappers {
+  width: 100%;
 }
 
 @media (min-width: 768px) {
@@ -70,9 +84,22 @@ th:hover {
     margin-bottom: 0;
   }
   
-  /* Show zoom buttons on desktop */
-  #zoomIn, #zoomOut {
-    display: block;
+  .zoom-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .button-group {
+    flex-direction: column;
+  }
+
+  .button-row {
+    flex-direction: column;
+  }
+
+  .button-row button {
+    width: 100%;
   }
 }
 
