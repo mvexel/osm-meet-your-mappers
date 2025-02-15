@@ -9,6 +9,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Set, Tuple
 
+
 def get_duplicate_ids(conn, cs_list: List[dict]) -> Set[int]:
     """
     Given a list of changeset dictionaries (each with an "id" key),
@@ -20,8 +21,10 @@ def get_duplicate_ids(conn, cs_list: List[dict]) -> Set[int]:
         existing = cur.fetchall()
     return {row[0] for row in existing}
 
+
 import sys
 import os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests
@@ -120,13 +123,16 @@ def get_current_sequence(
     return sequence
 
 
-def upsert_changesets(conn, cs_batch: List[dict], tag_batch: List[dict], comment_batch: List[dict]) -> None:
+def upsert_changesets(
+    conn, cs_batch: List[dict], tag_batch: List[dict], comment_batch: List[dict]
+) -> None:
     """
     Upsert changesets into the database. If a changeset already exists, update it.
     """
     with conn.cursor() as cur:
         for cs in cs_batch:
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO changesets (id, created_at, closed_at, open, user_id, user_name, num_changes)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO UPDATE SET
@@ -134,23 +140,45 @@ def upsert_changesets(conn, cs_batch: List[dict], tag_batch: List[dict], comment
                 open = EXCLUDED.open,
                 num_changes = EXCLUDED.num_changes
                 WHERE changesets.closed_at < EXCLUDED.closed_at OR changesets.open <> EXCLUDED.open;
-            """, (cs["id"], cs["created_at"], cs["closed_at"], cs["open"], cs["user_id"], cs["user_name"], cs["num_changes"]))
+            """,
+                (
+                    cs["id"],
+                    cs["created_at"],
+                    cs["closed_at"],
+                    cs["open"],
+                    cs["user_id"],
+                    cs["user_name"],
+                    cs["num_changes"],
+                ),
+            )
 
         for tag in tag_batch:
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO changeset_tags (changeset_id, key, value)
                 VALUES (%s, %s, %s)
                 ON CONFLICT (changeset_id, key) DO UPDATE SET
                 value = EXCLUDED.value;
-            """, (tag["changeset_id"], tag["key"], tag["value"]))
+            """,
+                (tag["changeset_id"], tag["key"], tag["value"]),
+            )
 
         for comment in comment_batch:
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO changeset_comments (changeset_id, user_id, user_name, date, text)
                 VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (changeset_id, user_id, date) DO UPDATE SET
                 text = EXCLUDED.text;
-            """, (comment["changeset_id"], comment["user_id"], comment["user_name"], comment["date"], comment["text"]))
+            """,
+                (
+                    comment["changeset_id"],
+                    comment["user_id"],
+                    comment["user_name"],
+                    comment["date"],
+                    comment["text"],
+                ),
+            )
 
     conn.commit()
 
@@ -401,20 +429,22 @@ def catch_up_worker() -> None:
     req_session = requests.Session()
 
     while True:
-        current_remote_seq = get_current_sequence()
-        stored_tip, last_processed = get_stored_metadata()
-        
+        current_remote_seq = get_current_sequence()  # latest sequence OSM has
+        stored_tip, last_processed = (
+            get_stored_metadata()
+        )  # latest sequence we have and last sequence processed by the catch up worker
+
         if stored_tip is None:
             stored_tip = current_remote_seq
             last_processed = current_remote_seq
             update_metadata(stored_tip, last_processed)
-        
+
         logging.debug(
             f"[{threading.current_thread().name}] Current remote sequence: {current_remote_seq}, "
             f"Stored tip: {stored_tip}, Last processed: {last_processed}"
         )
-        
-        # Process new changesets
+
+        # Process new changesets if there are any
         if current_remote_seq > stored_tip:
             seq = current_remote_seq
             while seq > stored_tip:
@@ -426,7 +456,7 @@ def catch_up_worker() -> None:
                 seq = block[-1] - 1
             update_metadata(current_remote_seq, seq)
             stored_tip, last_processed = current_remote_seq, seq
-        
+
         # Fill gaps
         if last_processed < stored_tip:
             seq = stored_tip
@@ -438,11 +468,13 @@ def catch_up_worker() -> None:
                 process_block(block, req_session, batch_size, pool_name="Gap-fill")
                 seq = block[-1] - 1
             update_metadata(stored_tip, seq)
-        
+
         logging.info(
             f"[{threading.current_thread().name}] Completed a pass. Sleeping before next poll..."
         )
-        time.sleep(int(os.getenv("SLEEP_TIME", 300)))  # Sleep 5 minutes before checking again
+        time.sleep(
+            int(os.getenv("SLEEP_TIME", 300))
+        )  # Sleep 5 minutes before checking again
 
 
 def main() -> None:
