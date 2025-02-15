@@ -14,9 +14,8 @@ import os
 from datetime import datetime
 from typing import List, Optional
 
-import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -238,6 +237,7 @@ async def get_mappers(
     """
     Retrieve all unique mappers with number of changes and date of most recent change for a bounding box.
     """
+    max_bbox_for_local = os.getenv("MAX_BBOX_FOR_LOCAL", 0.1)
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -248,7 +248,9 @@ SELECT
     MIN(created_at) AS first_change, 
     MAX(created_at) AS last_change
 FROM changesets
-WHERE 
+WHERE
+    max_lon - min_lon < %s AND max_lat - min_lat < %s
+AND 
     ST_Intersects(
         ST_MakeEnvelope(%s, %s, %s, %s, 4326), 
         bbox
@@ -257,7 +259,18 @@ GROUP BY username
 HAVING COUNT(id) >= %s
 ORDER BY changeset_count DESC
             """
-            cur.execute(query, (min_lon, min_lat, max_lon, max_lat, min_changesets))
+            cur.execute(
+                query,
+                (
+                    max_bbox_for_local,
+                    max_bbox_for_local,
+                    min_lon,
+                    min_lat,
+                    max_lon,
+                    max_lat,
+                    min_changesets,
+                ),
+            )
             results = cur.fetchall()
             return [
                 {
