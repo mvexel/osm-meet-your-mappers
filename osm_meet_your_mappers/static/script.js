@@ -172,9 +172,10 @@ const dataHandler = {
           link.rel = "noopener noreferrer";
           td.appendChild(link);
         } else if (col.type === "date") {
-          const date = new Date(value);
-          td.textContent = friendlyDate(date);
-          td.dataset.sort = date.getTime();
+          td.textContent = friendlyDate(value);
+          td.dataset.sort = new Date(
+            value + (value.endsWith("Z") ? "" : "Z")
+          ).getTime();
         } else {
           td.textContent = value;
         }
