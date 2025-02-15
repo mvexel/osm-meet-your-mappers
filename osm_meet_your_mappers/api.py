@@ -74,13 +74,18 @@ async def root():
 
 
 @app.get(
-    "/changesets/",
+    "/changesets",
     response_model=List[ChangesetResponse],
     summary="Query changesets",
     description="Retrieve OpenStreetMap changesets with optional filtering parameters.",
     response_description="List of changesets matching the query parameters",
 )
 async def get_changesets(
+    username: str = Query(
+        description="Filter by OpenStreetMap username",
+        example="JohnDoe",
+        min_length=1,
+    ),
     min_lon: Optional[float] = Query(
         None,
         description="Minimum longitude of bounding box",
@@ -108,12 +113,6 @@ async def get_changesets(
         example=51.686,
         ge=-90,
         le=90,
-    ),
-    username: Optional[str] = Query(
-        None,
-        description="Filter by OpenStreetMap username",
-        example="JohnDoe",
-        min_length=1,
     ),
     created_after: Optional[datetime] = Query(
         None,
@@ -238,6 +237,7 @@ async def get_mappers(
     Retrieve all unique mappers with number of changes and date of most recent change for a bounding box.
     """
     max_bbox_for_local = os.getenv("MAX_BBOX_FOR_LOCAL", 0.1)
+    max_age = os.getenv("MAX_AGE", "1 year")
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -250,6 +250,7 @@ SELECT
 FROM changesets
 WHERE
     max_lon - min_lon < %s AND max_lat - min_lat < %s
+AND AGE(closed_at) <= %s
 AND 
     ST_Intersects(
         ST_MakeEnvelope(%s, %s, %s, %s, 4326), 
@@ -264,6 +265,7 @@ ORDER BY changeset_count DESC
                 (
                     max_bbox_for_local,
                     max_bbox_for_local,
+                    max_age,
                     min_lon,
                     min_lat,
                     max_lon,
