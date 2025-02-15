@@ -242,14 +242,22 @@ async def get_mappers(
     try:
         with conn.cursor() as cur:
             query = """
-                SELECT username, COUNT(id) AS changeset_count, MIN(created_at) AS first_change, MAX(created_at) AS last_change
-                FROM changesets
-                WHERE min_lon >= %s AND max_lon <= %s AND min_lat >= %s AND max_lat <= %s
-                GROUP BY username
-                HAVING COUNT(id) >= %s
-                ORDER BY changeset_count DESC
+SELECT 
+    username, 
+    COUNT(id) AS changeset_count, 
+    MIN(created_at) AS first_change, 
+    MAX(created_at) AS last_change
+FROM changesets
+WHERE 
+    ST_Intersects(
+        ST_MakeEnvelope(%s, %s, %s, %s, 4326), 
+        bbox
+    )
+GROUP BY username
+HAVING COUNT(id) >= %s
+ORDER BY changeset_count DESC
             """
-            cur.execute(query, (min_lon, max_lon, min_lat, max_lat, min_changesets))
+            cur.execute(query, (min_lon, min_lat, max_lon, max_lat, min_changesets))
             results = cur.fetchall()
             return [
                 {
