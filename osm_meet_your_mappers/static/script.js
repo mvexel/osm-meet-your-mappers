@@ -13,7 +13,7 @@ const CONFIG = {
 const state = {
   currentBbox: null,
   currentData: null,
-  user: null,
+  osm: null,
 };
 
 // ================================
@@ -398,20 +398,21 @@ async function checkAuth() {
       credentials: "include",
     });
     if (!response.ok) throw new Error("Not authenticated");
-    const user = await response.json();
-    state.user = user;
-    return user;
+    const osm_user = await response.json();
+    state.osm = osm_user;
+    return osm_user;
   } catch (error) {
-    state.user = null;
+    state.osm = null;
     return null;
   }
 }
 
 function updateAuthUI() {
-  if (state.user) {
+  if (state.osm) {
     elements.auth.loginLink.style.display = "none";
     elements.auth.logoutContainer.style.display = "inline";
-    document.getElementById('loggedInAs').textContent = state.user.username;
+    document.getElementById("loggedInAs").textContent =
+      state.osm.user.display_name;
   } else {
     elements.auth.loginLink.style.display = "inline";
     elements.auth.logoutContainer.style.display = "none";
@@ -440,7 +441,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         method: "POST",
         credentials: "include",
       });
-      state.user = null;
+      state.osm = null;
       updateAuthUI();
       updateStatus("Successfully logged out");
     } catch (error) {
