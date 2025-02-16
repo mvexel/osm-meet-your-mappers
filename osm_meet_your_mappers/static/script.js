@@ -402,8 +402,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   elements.auth.logInOutButton.addEventListener("click", async (e) => {
     e.preventDefault();
     if (state.osm) {
-      window.location.href = "/login";
-    } else {
       try {
         await fetch("/logout", {
           method: "POST",
@@ -416,6 +414,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.error("Logout failed:", error);
         updateStatus("Logout failed. Please try again.");
       }
+    } else {
+      window.location.href = "/login";
     }
   });
 
