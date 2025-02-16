@@ -413,9 +413,31 @@ function updateAuthUI() {
     elements.auth.logoutContainer.style.display = "inline";
     document.getElementById("loggedInAs").textContent =
       state.osm.user.display_name;
+    // Enable map and controls
+    map.dragging.enable();
+    map.touchZoom.enable();
+    map.doubleClickZoom.enable();
+    map.scrollWheelZoom.enable();
+    map.boxZoom.enable();
+    map.keyboard.enable();
+    elements.map.drawRect.disabled = false;
+    elements.map.discardDraw.disabled = false;
+    elements.meetMappers.disabled = true;
+    updateStatus("Welcome! Draw a box on the map to get started.");
   } else {
     elements.auth.loginLink.style.display = "inline";
     elements.auth.logoutContainer.style.display = "none";
+    // Disable map and controls
+    map.dragging.disable();
+    map.touchZoom.disable();
+    map.doubleClickZoom.disable();
+    map.scrollWheelZoom.disable();
+    map.boxZoom.disable();
+    map.keyboard.disable();
+    elements.map.drawRect.disabled = true;
+    elements.map.discardDraw.disabled = true;
+    elements.meetMappers.disabled = true;
+    updateStatus("Please log in to use the map.");
   }
 }
 
@@ -456,5 +478,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   initializeSidebarButtons();
   elements.meetMappers.addEventListener("click", handleMeetMappers);
   elements.export.button.addEventListener("click", dataHandler.exportToCsv);
-  updateStatus(CONFIG.INITIAL_STATUS);
+  // Initial status will be set by updateAuthUI()
 });
