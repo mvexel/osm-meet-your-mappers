@@ -426,5 +426,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   initializeSidebarButtons();
   elements.meetMappers.addEventListener("click", handleMeetMappers);
   elements.export.button.addEventListener("click", dataHandler.exportToCsv);
-  updateStatus(CONFIG.INITIAL_STATUS);
+  updateStatus(state.osm ? "Welcome back! Draw an area to see its mappers." : CONFIG.INITIAL_STATUS);
 });
