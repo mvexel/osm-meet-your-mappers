@@ -12,9 +12,22 @@ There are a couple places you can configure stuff...
 
 ## Run
 
-- Install docker
-- Configure as outlined above
-- `docker compose up -d
+1. Install Poetry if you haven't already:
+   ```bash
+   curl -sSL https://install.python-poetry.org | python3 -
+   ```
+
+2. Install dependencies:
+   ```bash
+   poetry install
+   ```
+
+3. Install docker
+4. Configure as outlined above
+5. Start the services:
+   ```bash
+   docker compose up -d
+   ```
 
 This builds and launches 3 docker images:
 - `db` -- PostGIS built from [the multiarch fork](https://github.com/baosystems/docker-postgis) of the official PostGIS image. You can swap out for the [official image](https://github.com/postgis/docker-postgis/actions) if it works for you, but I did not test with that.
@@ -25,11 +38,21 @@ If you want to run this on a public server, you will need to set up Caddy or ngi
 
 ## Upgrade
 
-If you want to upgrade the application, pull the latest from Github and rebuild the images:
+If you want to upgrade the application:
 
-```
-git pull
-docker compose down -v
-docker compose build --no-cache
-docker compose up -d
-```
+1. Pull the latest from Github:
+   ```bash
+   git pull
+   ```
+
+2. Update dependencies:
+   ```bash
+   poetry install
+   ```
+
+3. Rebuild the docker images:
+   ```bash
+   docker compose down -v
+   docker compose build --no-cache
+   docker compose up -d
+   ```
