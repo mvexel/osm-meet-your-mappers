@@ -411,6 +411,7 @@ function updateAuthUI() {
   if (state.user) {
     elements.auth.loginLink.style.display = "none";
     elements.auth.logoutContainer.style.display = "inline";
+    document.getElementById('loggedInAs').textContent = state.user.username;
   } else {
     elements.auth.loginLink.style.display = "inline";
     elements.auth.logoutContainer.style.display = "none";
