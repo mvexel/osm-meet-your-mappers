@@ -66,6 +66,7 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 async def health_check():
     return {"status": "healthy"}
 
+
 @app.get("/version")
 async def get_version():
     """Get the current application version"""
