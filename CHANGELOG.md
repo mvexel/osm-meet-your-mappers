@@ -12,8 +12,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [v.1.0.3] - 2025-02-16
 
+### Added
+- OAuth authentication and login/logout functionality
+- Application version display in website footer
+- Favicon to website
+- "Logged in as <user>" display before logout link
+- Poetry package management system
+
 ### Changed
-- (Changes will be added based on git log output)
+- Refactored to read package version from pyproject.toml using tomli
+- Updated and reordered dependencies
+- Migrated Docker setup to use Poetry
+- Updated README with Poetry installation and usage instructions
+- Refactored API endpoints for authentication
+- Improved script organization and cleanup
+
+### Fixed
+- OSM user object naming consistency
 
 ## [v1.0.2] - YYYY-MM-DD
 

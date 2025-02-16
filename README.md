@@ -56,3 +56,5 @@ If you want to upgrade the application:
    docker compose build --no-cache
    docker compose up -d
    ```
+
+4. Check the [CHANGELOG.md](CHANGELOG.md) for any additional upgrade instructions specific to each version.
