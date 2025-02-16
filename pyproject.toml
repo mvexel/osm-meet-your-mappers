@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "meet-your-mappers"
-version = "1.0.2"
+version = "1.0.3"
 description = "Meet the OpenStreetMap mappers in your area"
 authors = ["Martijn van Exel <m@rtijn.org>"]
 license = "MIT"
