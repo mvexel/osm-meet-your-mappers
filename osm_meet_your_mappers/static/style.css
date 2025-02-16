@@ -33,10 +33,6 @@ th:hover {
   width: 100%;
 }
 
-.zoom-controls {
-  display: none;
-}
-
 .button-group {
   display: flex;
   flex-direction: column;
@@ -62,27 +58,27 @@ th:hover {
   #map {
     min-height: 400px;
   }
-  
+
   #mapContainer {
     flex-direction: row;
     gap: 2rem;
   }
-  
+
   .sidebar {
     width: 200px;
     margin: 0;
   }
-  
+
   .zoom-controls {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
   }
-  
+
   .button-row {
     flex-direction: column;
   }
-  
+
   .button-row button {
     width: 100%;
   }
@@ -116,9 +112,18 @@ th:hover {
 
 /* Animation */
 @keyframes flashAnim {
-  0% { background-color: #ffeb3b; transform: scale(1.05); }
-  50% { background-color: #fffde7; transform: scale(1); }
-  100% { background-color: #e0f7fa; transform: scale(1); }
+  0% {
+    background-color: #ffeb3b;
+    transform: scale(1.05);
+  }
+  50% {
+    background-color: #fffde7;
+    transform: scale(1);
+  }
+  100% {
+    background-color: #e0f7fa;
+    transform: scale(1);
+  }
 }
 
 .status-message.flash {

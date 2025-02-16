@@ -22,13 +22,6 @@
             <p>
                 <small>
                     <a href="/static/about.html">About &amp; Help</a>
-                    <span> | </span>
-                    <a href="#" id="loginLink">Log in</a>
-                    <span id="logoutContainer" style="display: none;">
-                        Logged in as <span id="loggedInAs"></span>
-                        <span> · </span>
-                        <a href="#" id="logoutLink">Log out</a>
-                    </span>
                 </small>
             </p>
         </hgroup>
@@ -38,17 +31,12 @@
         <div id="mapContainer">
             <div id="map"></div>
             <aside class="sidebar">
-                <div class="zoom-controls">
-                    <button class="secondary" id="zoomIn">Zoom In</button>
-                    <button class="secondary" id="zoomOut">Zoom Out</button>
-                </div>
-
                 <div class="button-group">
                     <div class="button-row">
+                        <button id="logInOut">Log In with OSM</button>
                         <button id="drawRect">Draw Rectangle</button>
-                        <button id="discardDraw">Start Over</button>
+                        <button id="meetMappers" class="submit-button contrast" disabled>Meet My Mappers</button>
                     </div>
-                    <button id="meetMappers" class="submit-button contrast" disabled>Meet My Mappers</button>
                 </div>
 
                 <div class="progress-indicator" role="progressbar" aria-hidden="true" style="visibility: hidden;">
