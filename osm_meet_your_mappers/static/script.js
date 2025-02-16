@@ -22,18 +22,24 @@ const state = {
 
 const elements = {
   status: document.querySelector(".status-message"),
-  meetMappers: document.getElementById("meetMappers"),
+  meetMappers: document.querySelector("#meetMappers"),
   progress: document.querySelector(".progress-indicator"),
-  results: document.getElementById("results"),
+  results: document.querySelector("#results"),
   export: {
-    container: document.getElementById("export-container"),
+    container: document.querySelector("#export-container"),
     button: document.querySelector(".export-csv-button"),
   },
-  // Sidebar buttons
-  zoomIn: document.getElementById("zoomIn"),
-  zoomOut: document.getElementById("zoomOut"),
-  drawRect: document.getElementById("drawRect"),
-  discardDraw: document.getElementById("discardDraw"),
+  map: {
+    zoomIn: document.querySelector("#zoomIn"),
+    zoomOut: document.querySelector("#zoomOut"),
+    drawRect: document.querySelector("#drawRect"),
+    discardDraw: document.querySelector("#discardDraw"),
+  },
+  auth: {
+    logoutLink: document.querySelector("#logoutLink"),
+    loginLink: document.querySelector("#loginLink"),
+    logoutContainer: document.querySelector("#logoutContainer"),
+  },
 };
 
 // ================================
@@ -317,22 +323,22 @@ function initializeMap() {
 
 function initializeSidebarButtons() {
   // Zoom
-  elements.zoomIn.addEventListener("click", () => {
+  elements.map.zoomIn.addEventListener("click", () => {
     map.zoomIn();
   });
 
-  elements.zoomOut.addEventListener("click", () => {
+  elements.map.zoomOut.addEventListener("click", () => {
     map.zoomOut();
   });
 
   // trigger draw handler
-  elements.drawRect.addEventListener("click", () => {
+  elements.map.drawRect.addEventListener("click", () => {
     drawnItems.clearLayers();
     drawRectangle.enable();
   });
 
   // clears any drawn layers, results table, and resets state
-  elements.discardDraw.addEventListener("click", () => {
+  elements.map.discardDraw.addEventListener("click", () => {
     drawnItems.clearLayers();
     elements.results.innerHTML = "";
     elements.export.container.style.display = "none";
@@ -402,15 +408,12 @@ async function checkAuth() {
 }
 
 function updateAuthUI() {
-  const loginLink = document.getElementById("loginLink");
-  const logoutContainer = document.getElementById("logoutContainer");
-  
   if (state.user) {
-    loginLink.style.display = "none";
-    logoutContainer.style.display = "inline";
+    elements.auth.loginLink.style.display = "none";
+    elements.auth.logoutContainer.style.display = "inline";
   } else {
-    loginLink.style.display = "inline";
-    logoutContainer.style.display = "none";
+    elements.auth.loginLink.style.display = "inline";
+    elements.auth.logoutContainer.style.display = "none";
   }
 }
 
@@ -422,14 +425,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Check auth status
   await checkAuth();
   updateAuthUI();
-  
+
   // Setup auth event listeners
-  document.getElementById("loginLink").addEventListener("click", (e) => {
+  elements.auth.loginLink.addEventListener("click", (e) => {
     e.preventDefault();
     window.location.href = "/login";
   });
 
-  document.getElementById("logoutLink").addEventListener("click", async (e) => {
+  elements.auth.logoutLink.addEventListener("click", async (e) => {
     e.preventDefault();
     try {
       await fetch("/logout", {
