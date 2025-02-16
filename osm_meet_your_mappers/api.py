@@ -74,6 +74,20 @@ async def login(request: Request):
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
+@app.get("/auth/check")
+async def check_auth(request: Request):
+    """Check if user is authenticated"""
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+@app.post("/logout")
+async def logout(request: Request):
+    """Log out the current user"""
+    request.session.pop("user", None)
+    return {"status": "success"}
+
 # Authorization callback: handle the redirect back from the OAuth provider.
 @app.get("/auth")
 async def auth(request: Request):

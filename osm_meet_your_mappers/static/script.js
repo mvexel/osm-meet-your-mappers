@@ -13,6 +13,7 @@ const CONFIG = {
 const state = {
   currentBbox: null,
   currentData: null,
+  user: null,
 };
 
 // ================================
@@ -382,10 +383,67 @@ async function getAppVersion() {
 }
 
 // ================================
+// Auth Functions
+// ================================
+
+async function checkAuth() {
+  try {
+    const response = await fetch("/auth/check", {
+      credentials: "include",
+    });
+    if (!response.ok) throw new Error("Not authenticated");
+    const user = await response.json();
+    state.user = user;
+    return user;
+  } catch (error) {
+    state.user = null;
+    return null;
+  }
+}
+
+function updateAuthUI() {
+  const loginLink = document.getElementById("loginLink");
+  const logoutContainer = document.getElementById("logoutContainer");
+  
+  if (state.user) {
+    loginLink.style.display = "none";
+    logoutContainer.style.display = "inline";
+  } else {
+    loginLink.style.display = "inline";
+    logoutContainer.style.display = "none";
+  }
+}
+
+// ================================
 // Initialization on DOM Ready
 // ================================
 
 document.addEventListener("DOMContentLoaded", async () => {
+  // Check auth status
+  await checkAuth();
+  updateAuthUI();
+  
+  // Setup auth event listeners
+  document.getElementById("loginLink").addEventListener("click", (e) => {
+    e.preventDefault();
+    window.location.href = "/login";
+  });
+
+  document.getElementById("logoutLink").addEventListener("click", async (e) => {
+    e.preventDefault();
+    try {
+      await fetch("/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      state.user = null;
+      updateAuthUI();
+      updateStatus("Successfully logged out");
+    } catch (error) {
+      console.error("Logout failed:", error);
+      updateStatus("Logout failed. Please try again.");
+    }
+  });
   // Set version in footer
   const versionElement = document.getElementById("app-version");
   versionElement.textContent = await getAppVersion();
