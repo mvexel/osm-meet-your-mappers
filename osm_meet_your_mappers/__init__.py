@@ -1,9 +1,14 @@
 """OSM Changeset Loader package."""
 
+import tomli
+from pathlib import Path
+
 from .api import app
 from .db import get_db_connection, truncate_tables
 
-__version__ = "1.0.2"
+# Read version from pyproject.toml
+with open(Path(__file__).parent.parent / "pyproject.toml", "rb") as f:
+    __version__ = tomli.load(f)["tool"]["poetry"]["version"]
 __all__ = [
     "app",
     "get_db_connection",
