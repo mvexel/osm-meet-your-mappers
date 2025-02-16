@@ -140,27 +140,34 @@ async def get_changesets(
     try:
         with conn.cursor() as cur:
             query = """
-                SELECT id, created_at, closed_at, username, uid, min_lon, min_lat, max_lon, max_lat, open
-                FROM changesets
-                WHERE (%s IS NULL OR min_lon >= %s)
-                  AND (%s IS NULL OR max_lon <= %s)
-                  AND (%s IS NULL OR min_lat >= %s)
-                  AND (%s IS NULL OR max_lat <= %s)
-                  AND (%s IS NULL OR username = %s)
-                  AND (%s IS NULL OR created_at >= %s)
-                  AND (%s IS NULL OR created_at <= %s)
-                LIMIT %s OFFSET %s
-            """
+SELECT 
+    id, 
+    created_at, 
+    closed_at, 
+    username, 
+    uid, 
+    min_lon, 
+    min_lat, 
+    max_lon, 
+    max_lat, 
+    open
+FROM 
+    changesets
+WHERE     
+    ST_Intersects(
+        ST_MakeEnvelope(%s, %s, %s, %s, 4326), 
+        bbox
+    )
+AND (%s IS NULL OR username = %s)
+AND (%s IS NULL OR created_at >= %s)
+AND (%s IS NULL OR created_at <= %s)
+LIMIT %s OFFSET %s;"""
             cur.execute(
                 query,
                 (
                     min_lon,
-                    min_lon,
-                    max_lon,
-                    max_lon,
                     min_lat,
-                    min_lat,
-                    max_lat,
+                    max_lon,
                     max_lat,
                     username,
                     username,
