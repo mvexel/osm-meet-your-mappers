@@ -30,7 +30,6 @@ dependencies = [
     "PyYAML==6.0.2",
     "requests==2.32.3",
     "shapely==2.0.7",
-    "SQLAlchemy==2.0.38",
     "python-dotenv==1.0.1",
     "uvicorn==0.34.0",
     "asyncpg==0.29.0",

@@ -30,13 +30,13 @@ app.add_middleware(
 
 # Initialize the OAuth instance
 oauth = OAuth()
-# Register a remote provider – for example, Google using OpenID Connect
 oauth.register(
-    "google",
-    client_id=os.getenv("GOOGLE_CLIENT_ID"),
-    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
-    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-    client_kwargs={"scope": "openid profile email"},
+    "openstreetmap",
+    client_id=os.getenv("OSM_CLIENT_ID"),
+    client_secret=os.getenv("OSM_CLIENT_SECRET"),
+    server_metadata_url="https://www.openstreetmap.org/.well-known/openid-configuration",
+    api_base_url="https://api.openstreetmap.org/api/0.6/",
+    client_kwargs={"scope": "read_prefs"},
 )
 
 # ------------------------
@@ -71,7 +71,7 @@ async def root():
 async def login(request: Request):
     redirect_uri = request.url_for("auth")
     # This call will store temporary credentials in the session automatically.
-    return await oauth.google.authorize_redirect(request, redirect_uri)
+    return await oauth.openstreetmap.authorize_redirect(request, redirect_uri)
 
 
 @app.get("/auth/check")
@@ -82,24 +82,31 @@ async def check_auth(request: Request):
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
+
 @app.post("/logout")
 async def logout(request: Request):
     """Log out the current user"""
     request.session.pop("user", None)
     return {"status": "success"}
 
-# Authorization callback: handle the redirect back from the OAuth provider.
+
 @app.get("/auth")
 async def auth(request: Request):
-    token = await oauth.google.authorize_access_token(request)
-    # Authlib automatically parses the ID token if using OpenID Connect
-    user = token.get("userinfo")
-    if not user:
+    token = await oauth.openstreetmap.authorize_access_token(request)
+    print(token)
+    # Await the asynchronous GET request
+    resp = await oauth.openstreetmap.get("user/details.json", token=token)
+    resp.raise_for_status()
+    profile = (
+        resp.json()
+    )  # If this is also asynchronous, use: profile = await resp.json()
+    print(profile)
+    if not profile:
         raise HTTPException(
             status_code=400, detail="Failed to retrieve user information"
         )
     # Store user info in session for later use
-    request.session["user"] = user
+    request.session["user"] = profile
     return RedirectResponse(url="/")
 
 
