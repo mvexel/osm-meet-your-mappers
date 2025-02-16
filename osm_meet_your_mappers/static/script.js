@@ -6,8 +6,7 @@ const CONFIG = {
   DATE_SORT_DESC: true, // whether to sort the table by date descending
   MAX_TABLE_ROWS: 100, // max number of rows to display (all will always be available in CSV)
   MAX_BOX_DEGREES: 1, // max allowed size on each side for the user drawn bbox
-  INITIAL_STATUS:
-    "Welcome! Draw a box on the map and click 'Meet Your Mappers' to get started.",
+  INITIAL_STATUS: "Welcome! Please log in with your OSM account to continue.",
 };
 
 const state = {
@@ -30,15 +29,10 @@ const elements = {
     button: document.querySelector(".export-csv-button"),
   },
   map: {
-    zoomIn: document.querySelector("#zoomIn"),
-    zoomOut: document.querySelector("#zoomOut"),
     drawRect: document.querySelector("#drawRect"),
-    discardDraw: document.querySelector("#discardDraw"),
   },
   auth: {
-    logoutLink: document.querySelector("#logoutLink"),
-    loginLink: document.querySelector("#loginLink"),
-    logoutContainer: document.querySelector("#logoutContainer"),
+    logInOutButton: document.querySelector("#logInOut"),
   },
 };
 
@@ -322,30 +316,10 @@ function initializeMap() {
 // ================================
 
 function initializeSidebarButtons() {
-  // Zoom
-  elements.map.zoomIn.addEventListener("click", () => {
-    map.zoomIn();
-  });
-
-  elements.map.zoomOut.addEventListener("click", () => {
-    map.zoomOut();
-  });
-
   // trigger draw handler
   elements.map.drawRect.addEventListener("click", () => {
     drawnItems.clearLayers();
     drawRectangle.enable();
-  });
-
-  // clears any drawn layers, results table, and resets state
-  elements.map.discardDraw.addEventListener("click", () => {
-    drawnItems.clearLayers();
-    elements.results.innerHTML = "";
-    elements.export.container.style.display = "none";
-    updateStatus("Please draw a box on the map!");
-    state.currentBbox = null;
-    state.currentData = null;
-    elements.meetMappers.disabled = true;
   });
 }
 
@@ -409,13 +383,9 @@ async function checkAuth() {
 
 function updateAuthUI() {
   if (state.osm) {
-    elements.auth.loginLink.style.display = "none";
-    elements.auth.logoutContainer.style.display = "inline";
-    document.getElementById("loggedInAs").textContent =
-      state.osm.user.display_name;
+    elements.auth.logInOutButton.textContent = "Log Out";
   } else {
-    elements.auth.loginLink.style.display = "inline";
-    elements.auth.logoutContainer.style.display = "none";
+    elements.auth.logInOutButton.textContent = "Log In";
   }
 }
 
@@ -429,26 +399,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateAuthUI();
 
   // Setup auth event listeners
-  elements.auth.loginLink.addEventListener("click", (e) => {
+  elements.auth.logInOutButton.addEventListener("click", async (e) => {
     e.preventDefault();
-    window.location.href = "/login";
-  });
-
-  elements.auth.logoutLink.addEventListener("click", async (e) => {
-    e.preventDefault();
-    try {
-      await fetch("/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-      state.osm = null;
-      updateAuthUI();
-      updateStatus("Successfully logged out");
-    } catch (error) {
-      console.error("Logout failed:", error);
-      updateStatus("Logout failed. Please try again.");
+    if (state.osm) {
+      window.location.href = "/login";
+    } else {
+      try {
+        await fetch("/logout", {
+          method: "POST",
+          credentials: "include",
+        });
+        state.osm = null;
+        updateAuthUI();
+        updateStatus("Successfully logged out");
+      } catch (error) {
+        console.error("Logout failed:", error);
+        updateStatus("Logout failed. Please try again.");
+      }
     }
   });
+
   // Set version in footer
   const versionElement = document.getElementById("app-version");
   versionElement.textContent = await getAppVersion();
