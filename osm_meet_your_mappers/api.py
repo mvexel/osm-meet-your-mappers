@@ -14,6 +14,7 @@ import os
 from datetime import datetime
 from typing import List, Optional
 
+import importlib.metadata
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query
 from fastapi.responses import FileResponse
@@ -64,6 +65,12 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+@app.get("/version")
+async def get_version():
+    """Get the current application version"""
+    version = importlib.metadata.version("meet-your-mappers")
+    return {"version": version}
 
 
 # the home page

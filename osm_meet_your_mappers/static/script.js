@@ -365,10 +365,29 @@ async function handleMeetMappers() {
 }
 
 // ================================
+// Version Handling
+// ================================
+
+async function getAppVersion() {
+  try {
+    const response = await fetch('/version');
+    if (!response.ok) throw new Error('Failed to fetch version');
+    const data = await response.json();
+    return data.version;
+  } catch (error) {
+    console.error('Error fetching version:', error);
+    return 'unknown';
+  }
+}
+
+// ================================
 // Initialization on DOM Ready
 // ================================
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  // Set version in footer
+  const versionElement = document.getElementById('app-version');
+  versionElement.textContent = await getAppVersion();
   initializeMap();
   initializeSidebarButtons();
   elements.meetMappers.addEventListener("click", handleMeetMappers);

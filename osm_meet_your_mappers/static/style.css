@@ -124,3 +124,19 @@ th:hover {
 .status-message.flash {
   animation: flashAnim 1s ease;
 }
+
+footer {
+  margin-top: 2rem;
+  padding: 1rem 0;
+  text-align: center;
+  color: #666;
+}
+
+footer a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+footer a:hover {
+  color: #000;
+}
