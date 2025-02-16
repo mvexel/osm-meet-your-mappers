@@ -326,6 +326,7 @@ function initializeSidebarButtons() {
 
   // trigger draw handler
   elements.drawRect.addEventListener("click", () => {
+    drawnItems.clearLayers();
     drawRectangle.enable();
   });
 
@@ -370,13 +371,13 @@ async function handleMeetMappers() {
 
 async function getAppVersion() {
   try {
-    const response = await fetch('/version');
-    if (!response.ok) throw new Error('Failed to fetch version');
+    const response = await fetch("/version");
+    if (!response.ok) throw new Error("Failed to fetch version");
     const data = await response.json();
     return data.version;
   } catch (error) {
-    console.error('Error fetching version:', error);
-    return 'unknown';
+    console.error("Error fetching version:", error);
+    return "unknown";
   }
 }
 
@@ -386,7 +387,7 @@ async function getAppVersion() {
 
 document.addEventListener("DOMContentLoaded", async () => {
   // Set version in footer
-  const versionElement = document.getElementById('app-version');
+  const versionElement = document.getElementById("app-version");
   versionElement.textContent = await getAppVersion();
   initializeMap();
   initializeSidebarButtons();

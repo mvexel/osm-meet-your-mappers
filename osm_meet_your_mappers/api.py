@@ -1,67 +1,52 @@
-"""
-OpenStreetMap Changeset API
-
-This API provides access to OpenStreetMap changeset data, allowing you to query changesets
-by various parameters including geographic bounds, time ranges, and user information.
-
-The API supports:
-- Querying changesets with filtering and pagination
-- Getting the oldest changeset timestamp in the database
-- Retrieving mapper statistics for a geographic area
-"""
-
 import os
 from datetime import datetime
 from typing import List, Optional
 
 import importlib.metadata
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Query, Depends, HTTPException
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.requests import Request
+from starlette.middleware.sessions import SessionMiddleware
 
 from .db import get_db_connection
 
+# Load environment variables
 load_dotenv()
 
-
-class ChangesetResponse(BaseModel):
-    id: int
-    created_at: datetime
-    closed_at: Optional[datetime]
-    username: str
-    uid: int
-    min_lon: float
-    min_lat: float
-    max_lon: float
-    max_lat: float
-    open: Optional[bool]
-
-    class Config:
-        from_attributes = True
-
-
-class MetadataResponse(BaseModel):
-    sequence: int
-    timestamp: datetime
-
-    class Config:
-        from_attributes = True
-
+# ------------------------
+# OAuth Setup with Authlib
+# ------------------------
+from authlib.integrations.starlette_client import OAuth
 
 app = FastAPI()
 
+# Add session middleware (required for storing temporary credentials)
+app.add_middleware(
+    SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "CHANGE_ME")
+)
 
-# Get the directory containing this file
+# Initialize the OAuth instance
+oauth = OAuth()
+# Register a remote provider – for example, Google using OpenID Connect
+oauth.register(
+    "google",
+    client_id=os.getenv("GOOGLE_CLIENT_ID"),
+    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid profile email"},
+)
+
+# ------------------------
+# Static Files & Basic Endpoints
+# ------------------------
 current_dir = os.path.dirname(os.path.abspath(__file__))
 static_dir = os.path.join(current_dir, "static")
-
-# Mount the static directory
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
-# Health check endpoint
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
@@ -69,18 +54,67 @@ async def health_check():
 
 @app.get("/version")
 async def get_version():
-    """Get the current application version"""
     version = importlib.metadata.version("meet-your-mappers")
     return {"version": version}
 
 
-# the home page
 @app.get("/")
 async def root():
-    """Serve the main HTML page"""
     return FileResponse(os.path.join(static_dir, "index.html"))
 
 
+# ------------------------
+# OAuth Endpoints
+# ------------------------
+# Login endpoint: redirect the user to the OAuth provider’s authorization page.
+@app.get("/login")
+async def login(request: Request):
+    redirect_uri = request.url_for("auth")
+    # This call will store temporary credentials in the session automatically.
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+
+# Authorization callback: handle the redirect back from the OAuth provider.
+@app.get("/auth")
+async def auth(request: Request):
+    token = await oauth.google.authorize_access_token(request)
+    # Authlib automatically parses the ID token if using OpenID Connect
+    user = token.get("userinfo")
+    if not user:
+        raise HTTPException(
+            status_code=400, detail="Failed to retrieve user information"
+        )
+    # Store user info in session for later use
+    request.session["user"] = user
+    return RedirectResponse(url="/")
+
+
+# ------------------------
+# Dependency to enforce authentication
+# ------------------------
+def get_current_user(request: Request):
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+
+class ChangesetResponse(BaseModel):
+    id: int
+    created_at: datetime
+    closed_at: datetime
+    username: str
+    uid: int
+    min_lon: float
+    min_lat: float
+    max_lon: float
+    max_lat: float
+    open
+
+
+# ------------------------
+# Protected API Endpoints
+# ------------------------
 @app.get(
     "/changesets",
     response_model=List[ChangesetResponse],
@@ -90,60 +124,30 @@ async def root():
 )
 async def get_changesets(
     username: str = Query(
-        description="Filter by OpenStreetMap username",
-        example="JohnDoe",
-        min_length=1,
+        ..., description="Filter by OpenStreetMap username", min_length=1
     ),
     min_lon: Optional[float] = Query(
-        None,
-        description="Minimum longitude of bounding box",
-        example=-0.489,
-        ge=-180,
-        le=180,
+        None, description="Minimum longitude", ge=-180, le=180
     ),
     max_lon: Optional[float] = Query(
-        None,
-        description="Maximum longitude of bounding box",
-        example=0.236,
-        ge=-180,
-        le=180,
+        None, description="Maximum longitude", ge=-180, le=180
     ),
     min_lat: Optional[float] = Query(
-        None,
-        description="Minimum latitude of bounding box",
-        example=51.28,
-        ge=-90,
-        le=90,
+        None, description="Minimum latitude", ge=-90, le=90
     ),
     max_lat: Optional[float] = Query(
-        None,
-        description="Maximum latitude of bounding box",
-        example=51.686,
-        ge=-90,
-        le=90,
+        None, description="Maximum latitude", ge=-90, le=90
     ),
     created_after: Optional[datetime] = Query(
-        None,
-        description="Filter changesets created after this date (ISO format)",
-        example="2024-01-01T00:00:00Z",
+        None, description="Created after (ISO format)"
     ),
     created_before: Optional[datetime] = Query(
-        None,
-        description="Filter changesets created before this date (ISO format)",
-        example="2024-02-01T00:00:00Z",
+        None, description="Created before (ISO format)"
     ),
-    limit: int = Query(
-        100,
-        description="Maximum number of results to return",
-        example=100,
-        ge=1,
-        le=1000,
-    ),
-    offset: int = Query(0, description="Offset for pagination", example=0, ge=0),
+    limit: int = Query(100, description="Max number of results", ge=1, le=1000),
+    offset: int = Query(0, description="Offset for pagination", ge=0),
+    current_user: dict = Depends(get_current_user),  # Require authentication
 ):
-    """
-    Get changesets with optional filters.
-    """
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -169,7 +173,8 @@ WHERE
 AND (%s IS NULL OR username = %s)
 AND (%s IS NULL OR created_at >= %s)
 AND (%s IS NULL OR created_at <= %s)
-LIMIT %s OFFSET %s;"""
+LIMIT %s OFFSET %s;
+"""
             cur.execute(
                 query,
                 (
@@ -189,18 +194,18 @@ LIMIT %s OFFSET %s;"""
             )
             results = cur.fetchall()
             return [
-                {
-                    "id": row[0],
-                    "created_at": row[1],
-                    "closed_at": row[2],
-                    "username": row[3],
-                    "uid": row[4],
-                    "min_lon": row[5],
-                    "min_lat": row[6],
-                    "max_lon": row[7],
-                    "max_lat": row[8],
-                    "open": row[9],
-                }
+                ChangesetResponse(
+                    id=int(row[0]),
+                    created_at=row[1],
+                    closed_at=row[2],
+                    username=row[3],
+                    uid=row[4],
+                    min_lon=row[5],
+                    min_lat=row[6],
+                    max_lon=row[7],
+                    max_lat=row[8],
+                    open=row[9],
+                )
                 for row in results
             ]
     finally:
@@ -210,49 +215,19 @@ LIMIT %s OFFSET %s;"""
 @app.get(
     "/mappers/",
     summary="Get mapper statistics",
-    description="Retrieve statistics about mappers who have contributed within a specified geographic area.",
-    response_description="List of mapper statistics including changeset counts and last activity",
+    description="Retrieve statistics about mappers in a geographic area.",
+    response_description="List of mapper statistics",
 )
 async def get_mappers(
-    min_lon: float = Query(
-        ...,
-        description="Minimum longitude of bounding box",
-        example=-114.053,
-        ge=-180,
-        le=180,
-    ),
-    max_lon: float = Query(
-        ...,
-        description="Maximum longitude of bounding box",
-        example=-109.041,
-        ge=-180,
-        le=180,
-    ),
-    min_lat: float = Query(
-        ...,
-        description="Minimum latitude of bounding box",
-        example=36.998,
-        ge=-90,
-        le=90,
-    ),
-    max_lat: float = Query(
-        ...,
-        description="Maximum latitude of bounding box",
-        example=42.002,
-        ge=-90,
-        le=90,
-    ),
+    min_lon: float = Query(..., description="Minimum longitude", ge=-180, le=180),
+    max_lon: float = Query(..., description="Maximum longitude", ge=-180, le=180),
+    min_lat: float = Query(..., description="Minimum latitude", ge=-90, le=90),
+    max_lat: float = Query(..., description="Maximum latitude", ge=-90, le=90),
     min_changesets: int = Query(
-        os.getenv("MIN_CHANGESETS"),
-        description="Minimum number of changesets for a user",
-        ge=1,
+        os.getenv("MIN_CHANGESETS"), description="Minimum number of changesets", ge=1
     ),
+    current_user: dict = Depends(get_current_user),  # Require authentication
 ):
-    """
-    Retrieve all unique mappers with number of changes and date of most recent change for a bounding box.
-    """
-    max_bbox_for_local = os.getenv("MAX_BBOX_FOR_LOCAL", 0.1)
-    max_age = os.getenv("MAX_AGE", "1 year")
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -266,8 +241,7 @@ FROM changesets
 WHERE
     max_lon - min_lon < %s AND max_lat - min_lat < %s
 AND AGE(closed_at) <= %s
-AND 
-    ST_Intersects(
+AND ST_Intersects(
         ST_MakeEnvelope(%s, %s, %s, %s, 4326), 
         bbox
     )
@@ -278,9 +252,9 @@ ORDER BY changeset_count DESC
             cur.execute(
                 query,
                 (
-                    max_bbox_for_local,
-                    max_bbox_for_local,
-                    max_age,
+                    os.getenv("MAX_BBOX_FOR_LOCAL", 0.1),
+                    os.getenv("MAX_BBOX_FOR_LOCAL", 0.1),
+                    os.getenv("MAX_AGE", "1 year"),
                     min_lon,
                     min_lat,
                     max_lon,
@@ -303,26 +277,21 @@ ORDER BY changeset_count DESC
 
 
 def main():
-    """CLI entry point that starts the uvicorn server"""
     import argparse
-
     import uvicorn
 
     parser = argparse.ArgumentParser(
-        description="OSM Meet Your Mappers - A tool to explore OpenStreetMap mapping activity"
+        description="OSM Meet Your Mappers - Explore OpenStreetMap mapping activity"
     )
     parser.add_argument(
-        "--host", default="0.0.0.0", help="Host interface to bind to (default: 0.0.0.0)"
+        "--host", default="0.0.0.0", help="Host interface (default: 0.0.0.0)"
     )
-    parser.add_argument(
-        "--port", type=int, default=8000, help="Port to listen on (default: 8000)"
-    )
+    parser.add_argument("--port", type=int, default=8000, help="Port (default: 8000)")
     parser.add_argument(
         "--reload", action="store_true", help="Enable auto-reload on code changes"
     )
 
     args = parser.parse_args()
-
     uvicorn.run(app, host=args.host, port=args.port, reload=args.reload)
 
 
