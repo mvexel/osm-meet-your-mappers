@@ -93,14 +93,12 @@ async def logout(request: Request):
 @app.get("/auth")
 async def auth(request: Request):
     token = await oauth.openstreetmap.authorize_access_token(request)
-    print(token)
     # Await the asynchronous GET request
     resp = await oauth.openstreetmap.get("user/details.json", token=token)
     resp.raise_for_status()
     profile = (
         resp.json()
     )  # If this is also asynchronous, use: profile = await resp.json()
-    print(profile)
     if not profile:
         raise HTTPException(
             status_code=400, detail="Failed to retrieve user information"
