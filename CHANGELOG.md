@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v1.0.5] - 2025-02-16
 
 ### Added
-- UI element showing who you are logged in as
 
 ### Changed
 - Updated UI to display logged-in user information in the top right corner
