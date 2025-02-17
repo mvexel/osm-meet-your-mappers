@@ -382,13 +382,17 @@ async function checkAuth() {
 }
 
 function updateAuthUI() {
+  const userDisplay = document.getElementById('user-display');
   if (state.osm) {
     elements.auth.logInOutBtn.textContent = "Log Out";
     elements.map.drawRectBtn.disabled = false;
+    userDisplay.style.display = 'block';
+    userDisplay.querySelector('.username').textContent = state.osm.display_name;
   } else {
     elements.auth.logInOutBtn.textContent = "Log In with OSM";
     elements.map.drawRectBtn.disabled = true;
     elements.meetMappersBtn.disabled = true;
+    userDisplay.style.display = 'none';
   }
 }
 

@@ -16,15 +16,20 @@
 
 <body>
     <main class="container">
-        <hgroup>
-            <h1>Meet Your Mappers!</h1>
-            <p>Discover OpenStreetMap mappers near you</p>
-            <p>
-                <small>
-                    <a href="/static/about.html">About &amp; Help</a>
-                </small>
-            </p>
-        </hgroup>
+        <div class="header-row">
+            <hgroup>
+                <h1>Meet Your Mappers!</h1>
+                <p>Discover OpenStreetMap mappers near you</p>
+                <p>
+                    <small>
+                        <a href="/static/about.html">About &amp; Help</a>
+                    </small>
+                </p>
+            </hgroup>
+            <div id="user-display" class="user-display" style="display: none;">
+                Logged in as <span class="username"></span>
+            </div>
+        </div>
 
         <div class="status-message" role="status"></div>
 
