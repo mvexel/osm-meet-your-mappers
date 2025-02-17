@@ -30,6 +30,9 @@ COPY --from=builder /install /usr/local
 # Copy your application code
 COPY . .
 
+# Install the package in development mode
+RUN pip install -e .
+
 # Expose the port your app listens on
 EXPOSE 8000
 
