@@ -478,7 +478,6 @@ def catch_up_worker() -> None:
 
 
 def main() -> None:
-    # Configure logging to include the thread name in every message.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s [%(threadName)s]: %(message)s",
