@@ -1,11 +1,8 @@
-.aider*
 venv/
 __pycache__/
-target/
-node_modules/
 .DS_Store
 *.egg-info
+.env
+.aider*
 .DS_Store
-.env
-.env
-.env
+.vscode/
