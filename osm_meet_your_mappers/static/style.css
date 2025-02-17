@@ -49,10 +49,6 @@ th:hover {
   flex: 1;
 }
 
-#meetMappers {
-  width: 100%;
-}
-
 /* Desktop styles */
 @media (min-width: 768px) {
   #map {

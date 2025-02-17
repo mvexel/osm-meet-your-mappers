@@ -21,7 +21,7 @@ const state = {
 
 const elements = {
   status: document.querySelector(".status-message"),
-  meetMappers: document.querySelector("#meetMappers"),
+  meetMappersBtn: document.querySelector("#meetMappers"),
   progress: document.querySelector(".progress-indicator"),
   results: document.querySelector("#results"),
   export: {
@@ -29,10 +29,10 @@ const elements = {
     button: document.querySelector(".export-csv-button"),
   },
   map: {
-    drawRect: document.querySelector("#drawRect"),
+    drawRectBtn: document.querySelector("#drawRect"),
   },
   auth: {
-    logInOutButton: document.querySelector("#logInOut"),
+    logInOutBtn: document.querySelector("#logInOut"),
   },
 };
 
@@ -99,14 +99,14 @@ function updateStatus(message) {
 
 const ui = {
   showLoader: () => {
-    elements.meetMappers.disabled = true;
+    elements.meetMappersBtn.disabled = true;
     elements.progress.style.visibility = "visible";
     elements.progress.setAttribute("aria-hidden", "false");
     elements.status.innerHTML = '<span class="loader"></span> Loading data...';
   },
 
   hideLoader: () => {
-    elements.meetMappers.disabled = false;
+    elements.meetMappersBtn.disabled = false;
     elements.progress.style.visibility = "hidden";
     elements.progress.setAttribute("aria-hidden", "true");
   },
@@ -305,7 +305,7 @@ function initializeMap() {
         maxLon: ne.lng,
       };
 
-      elements.meetMappers.disabled = false;
+      elements.meetMappersBtn.disabled = false;
       updateStatus("Bounding box OK!");
     }
   });
@@ -317,7 +317,7 @@ function initializeMap() {
 
 function initializeSidebarButtons() {
   // trigger draw handler
-  elements.map.drawRect.addEventListener("click", () => {
+  elements.map.drawRectBtn.addEventListener("click", () => {
     drawnItems.clearLayers();
     drawRectangle.enable();
   });
@@ -383,9 +383,12 @@ async function checkAuth() {
 
 function updateAuthUI() {
   if (state.osm) {
-    elements.auth.logInOutButton.textContent = "Log Out";
+    elements.auth.logInOutBtn.textContent = "Log Out";
+    elements.map.drawRectBtn.disabled = false;
   } else {
-    elements.auth.logInOutButton.textContent = "Log In";
+    elements.auth.logInOutBtn.textContent = "Log In with OSM";
+    elements.map.drawRectBtn.disabled = true;
+    elements.meetMappersBtn.disabled = true;
   }
 }
 
@@ -399,7 +402,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateAuthUI();
 
   // Setup auth event listeners
-  elements.auth.logInOutButton.addEventListener("click", async (e) => {
+  elements.auth.logInOutBtn.addEventListener("click", async (e) => {
     e.preventDefault();
     if (state.osm) {
       try {
@@ -424,7 +427,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   versionElement.textContent = await getAppVersion();
   initializeMap();
   initializeSidebarButtons();
-  elements.meetMappers.addEventListener("click", handleMeetMappers);
+  elements.meetMappersBtn.addEventListener("click", handleMeetMappers);
   elements.export.button.addEventListener("click", dataHandler.exportToCsv);
-  updateStatus(state.osm ? "Welcome back! Draw an area to see its mappers." : CONFIG.INITIAL_STATUS);
+  updateStatus(
+    state.osm
+      ? "Welcome back! Draw an area to see its mappers."
+      : CONFIG.INITIAL_STATUS
+  );
 });
