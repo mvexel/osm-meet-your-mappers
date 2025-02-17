@@ -16,7 +16,7 @@ services:
 
   api:
     build: .
-    command: gunicorn -k uvicorn.workers.UvicornWorker osm_meet_your_mappers.api:app --bind 0.0.0.0:8000 --workers 4
+    command: uvicorn osm_meet_your_mappers.api:app --host 0.0.0.0 --workers 4 --proxy-headers
     volumes:
       - .:/app
       - ./osm_meet_your_mappers/static:/app/osm_meet_your_mappers/static
