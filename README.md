@@ -12,19 +12,9 @@ There are a couple places you can configure stuff...
 
 ## Run
 
-1. Install Poetry if you haven't already:
-   ```bash
-   curl -sSL https://install.python-poetry.org | python3 -
-   ```
-
-2. Install dependencies:
-   ```bash
-   poetry install
-   ```
-
-3. Install docker
-4. Configure as outlined above
-5. Start the services:
+1. Install docker
+2. Configure as outlined above
+3. Start the services:
    ```bash
    docker compose up -d
    ```
@@ -47,7 +37,7 @@ If you want to upgrade the application:
 
 2. Update dependencies:
    ```bash
-   poetry install
+   pip install -r requirements.txt
    ```
 
 3. Rebuild the docker images:
