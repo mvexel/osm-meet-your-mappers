@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS changesets (
     min_lon DOUBLE PRECISION,
     max_lat DOUBLE PRECISION,
     max_lon DOUBLE PRECISION,
-    bbox geometry(POLYGON, 4326)
+    bbox geometry(Geometry, 4326)
 );
 
 CREATE INDEX IF NOT EXISTS idx_changesets_bbox_username ON changesets USING GIST (bbox, username);

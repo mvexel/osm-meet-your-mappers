@@ -7,11 +7,10 @@ from datetime import datetime
 from typing import Optional
 from osm_meet_your_mappers.db import get_db_connection
 
-import psycopg2
 from dotenv import load_dotenv
 from lxml import etree
 from psycopg2.extras import execute_batch
-from shapely.geometry import box
+from shapely.geometry import box, Point
 
 load_dotenv()
 
@@ -63,6 +62,15 @@ def parse_changeset(
     if to_date and created_at.date() > to_date:
         return None
 
+    min_lon = float(elem.attrib.get("min_lon", 0))
+    min_lat = float(elem.attrib.get("min_lat", 0))
+    max_lon = float(elem.attrib.get("max_lon", 0))
+    max_lat = float(elem.attrib.get("max_lat", 0))
+    geometry = (
+        box(min_lon, min_lat, max_lon, max_lat)
+        if min_lon != min_lat and max_lon != max_lat
+        else Point(min_lon, min_lat)
+    )
     cs = {
         "id": cs_id,
         "username": elem.attrib.get("user"),
@@ -72,14 +80,12 @@ def parse_changeset(
         "open": elem.attrib.get("open", "").lower() == "true",
         "num_changes": int(elem.attrib.get("num_changes", 0)),
         "comments_count": int(elem.attrib.get("comments_count", 0)),
-        "min_lat": float(elem.attrib.get("min_lat", 0)),
-        "min_lon": float(elem.attrib.get("min_lon", 0)),
-        "max_lat": float(elem.attrib.get("max_lat", 0)),
-        "max_lon": float(elem.attrib.get("max_lon", 0)),
+        "min_lat": min_lat,
+        "min_lon": min_lon,
+        "max_lat": max_lat,
+        "max_lon": max_lon,
     }
-    cs["bbox"] = (
-        f"SRID=4326;{box(cs['min_lon'], cs['min_lat'], cs['max_lon'], cs['max_lat']).wkt}"
-    )
+    cs["bbox"] = f"SRID=4326;{geometry.wkt}"
 
     tags = [
         {"changeset_id": cs_id, "k": tag.attrib["k"], "v": tag.attrib.get("v")}
