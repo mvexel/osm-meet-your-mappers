@@ -9,31 +9,26 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Set, Tuple
 
+import requests
+import yaml
+from dotenv import load_dotenv
+from lxml import etree
 
-def get_duplicate_ids(conn, cs_list: List[dict]) -> Set[int]:
+from osm_meet_your_mappers.db import get_db_connection
+from scripts.archive_loader import insert_batch, parse_changeset
+
+
+def get_duplicate_ids(db_connection, cs_list: List[dict]) -> Set[int]:
     """
     Given a list of changeset dictionaries (each with an "id" key),
     return the set of IDs that already exist in the database.
     """
     cs_ids = [cs["id"] for cs in cs_list]
-    with conn.cursor() as cur:
+    with db_connection.cursor() as cur:
         cur.execute("SELECT id FROM changesets WHERE id = ANY(%s)", (cs_ids,))
         existing = cur.fetchall()
     return {row[0] for row in existing}
 
-
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import requests
-import yaml
-from scripts.archive_loader import insert_batch, parse_changeset
-from dotenv import load_dotenv
-from lxml import etree
-
-from osm_meet_your_mappers.db import get_db_connection
 
 load_dotenv()
 
@@ -44,7 +39,7 @@ insert_lock = threading.Lock()
 metadata_lock = threading.Lock()
 
 # Throttling globals
-THROTTLE_DELAY = float(os.getenv("THROTTLE_DELAY", 1.0))  # seconds between requests
+THROTTLE_DELAY = float(os.getenv("THROTTLE_DELAY", "1.0"))  # seconds between requests
 last_request_time = 0
 throttle_lock = threading.Lock()
 
@@ -64,7 +59,9 @@ def throttle() -> None:
 
 def replication_file_url(
     seq_number: int,
-    base_url: str = "https://planet.osm.org/replication/changesets",
+    base_url: str = os.getenv(
+        "REPLICATION_BASE_URL", "https://planet.osm.org/replication/changesets"
+    ),
 ) -> str:
     """
     Build the URL for the replication file corresponding to a given sequence number.
