@@ -17,11 +17,13 @@ And convert the invalid polygons to valid points:
 UPDATE changesets
 SET bbox = ST_Point(
     ST_X(ST_PointN(ST_ExteriorRing(bbox), 1)),
-    ST_Y(ST_PointN(ST_ExteriorRing(bbox), 1))
+    ST_Y(ST_PointN(ST_ExteriorRing(bbox), 1)),
+    4326
 )
 WHERE ST_GeometryType(bbox) = 'ST_Polygon' 
 AND ST_Area(bbox) = 0;
 ```
+- 0937a9c071cbbd296c9dae8f82a514871a9f5ce4 Started experimenting with user activity centers
 
 ## [v1.0.5] - 2025-02-16
 
