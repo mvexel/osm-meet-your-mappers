@@ -1,15 +1,22 @@
+"""
+Meet Your Mappers API
+"""
+
+import argparse
+import importlib.metadata
 import os
 from datetime import datetime
 from typing import List, Optional
 
-import importlib.metadata
+import uvicorn
+from authlib.integrations.starlette_client import OAuth
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query, Depends, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from starlette.requests import Request
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
 
 from .db import get_db_connection
 
@@ -19,7 +26,6 @@ load_dotenv()
 # ------------------------
 # OAuth Setup with Authlib
 # ------------------------
-from authlib.integrations.starlette_client import OAuth
 
 app = FastAPI()
 
@@ -49,17 +55,26 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/health")
 async def health_check():
+    """
+    API Health Check
+    """
     return {"status": "healthy"}
 
 
 @app.get("/version")
 async def get_version():
+    """
+    Get the application version
+    """
     version = importlib.metadata.version("meet-your-mappers")
     return {"version": version}
 
 
 @app.get("/")
 async def root():
+    """
+    Serve index.html as static root endpoint.
+    """
     return FileResponse(os.path.join(static_dir, "index.html"))
 
 
@@ -69,6 +84,9 @@ async def root():
 # Login endpoint: redirect the user to the OAuth provider’s authorization page.
 @app.get("/login")
 async def login(request: Request):
+    """
+    Redirect to OSM authorization
+    """
     redirect_uri = request.url_for("auth")
     # This call will store temporary credentials in the session automatically.
     return await oauth.openstreetmap.authorize_redirect(request, redirect_uri)
@@ -92,6 +110,9 @@ async def logout(request: Request):
 
 @app.get("/auth")
 async def auth(request: Request):
+    """
+    Get the session token and retrieve user info
+    """
     token = await oauth.openstreetmap.authorize_access_token(request)
     # Await the asynchronous GET request
     resp = await oauth.openstreetmap.get("user/details.json", token=token)
@@ -112,6 +133,9 @@ async def auth(request: Request):
 # Dependency to enforce authentication
 # ------------------------
 def get_current_user(request: Request):
+    """
+    Get user details from session
+    """
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -119,6 +143,10 @@ def get_current_user(request: Request):
 
 
 class ChangesetResponse(BaseModel):
+    """
+    Changeset
+    """
+
     id: int
     created_at: datetime
     closed_at: datetime
@@ -128,7 +156,7 @@ class ChangesetResponse(BaseModel):
     min_lat: float
     max_lon: float
     max_lat: float
-    open
+    open: bool
 
 
 # ------------------------
@@ -165,8 +193,11 @@ async def get_changesets(
     ),
     limit: int = Query(100, description="Max number of results", ge=1, le=1000),
     offset: int = Query(0, description="Offset for pagination", ge=0),
-    current_user: dict = Depends(get_current_user),  # Require authentication
+    current_user: dict = Depends(get_current_user),  # pylint: disable=unused-argument
 ):
+    """
+    Get changesets for a user and bbox, paginated.
+    """
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -245,8 +276,11 @@ async def get_mappers(
     min_changesets: int = Query(
         os.getenv("MIN_CHANGESETS"), description="Minimum number of changesets", ge=1
     ),
-    current_user: dict = Depends(get_current_user),  # Require authentication
+    current_user: dict = Depends(get_current_user),  # pylint: disable=unused-argument
 ):
+    """
+    Get mappers within a bbox
+    """
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -271,8 +305,8 @@ ORDER BY changeset_count DESC
             cur.execute(
                 query,
                 (
-                    os.getenv("MAX_BBOX_FOR_LOCAL", 0.1),
-                    os.getenv("MAX_BBOX_FOR_LOCAL", 0.1),
+                    os.getenv("MAX_BBOX_FOR_LOCAL", "0.1"),
+                    os.getenv("MAX_BBOX_FOR_LOCAL", "0.1"),
                     os.getenv("MAX_AGE", "1 year"),
                     min_lon,
                     min_lat,
@@ -296,9 +330,9 @@ ORDER BY changeset_count DESC
 
 
 def main():
-    import argparse
-    import uvicorn
-
+    """
+    App entrypoint
+    """
     parser = argparse.ArgumentParser(
         description="OSM Meet Your Mappers - Explore OpenStreetMap mapping activity"
     )

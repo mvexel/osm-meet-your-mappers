@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- cfb0334a79341a148e6d4358f2b9e8ebb83cd720 Fix model and ingest script to allow for changeset bounds that are points. When upgrading from a previous version, manually alter the `changesets` table:
+```SQL
+ALTER TABLE changesets 
+ALTER COLUMN bbox TYPE geometry(Geometry,4326);
+```
+And convert the invalid polygons to valid points:
+```
+UPDATE changesets
+SET bbox = ST_Point(
+    ST_X(ST_PointN(ST_ExteriorRing(bbox), 1)),
+    ST_Y(ST_PointN(ST_ExteriorRing(bbox), 1))
+)
+WHERE ST_GeometryType(bbox) = 'ST_Polygon' 
+AND ST_Area(bbox) = 0;
+```
+
 ## [v1.0.5] - 2025-02-16
 
 ### Added
