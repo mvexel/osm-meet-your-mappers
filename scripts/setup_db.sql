@@ -51,3 +51,55 @@ CREATE TABLE IF NOT EXISTS metadata (
     last_processed INTEGER,
     timestamp TIMESTAMP
 );
+
+-- Activity Center view (experimental)
+
+CREATE OR REPLACE VIEW user_activity_centers AS
+WITH normalized_geometries AS (
+    SELECT 
+        username,
+        CASE 
+            WHEN ST_GeometryType(bbox) = 'ST_Point' THEN bbox
+            ELSE ST_Centroid(bbox)
+        END AS point_geom
+    FROM changesets
+    WHERE bbox IS NOT NULL 
+),
+clustered_locations AS (
+    SELECT 
+        username,
+        -- eps: 0.005 (roughly 500m) for granular clusters
+        ST_ClusterDBSCAN(ST_SetSRID(point_geom, 4326), eps := 0.005, minpoints := 3) 
+            over (PARTITION BY username) as cluster_id,
+        point_geom
+    FROM normalized_geometries
+),
+cluster_stats AS (
+    SELECT 
+        username,
+        cluster_id,
+        ST_SetSRID(ST_Centroid(ST_Collect(point_geom)), 4326) as cluster_center,
+        COUNT(*) as changeset_count
+    FROM clustered_locations
+    WHERE cluster_id IS NOT NULL
+    GROUP BY username, cluster_id
+),
+ranked_clusters AS (
+    SELECT 
+        username,
+        cluster_center,
+        changeset_count,
+        ROW_NUMBER() OVER (
+            PARTITION BY username 
+            ORDER BY changeset_count DESC
+        ) as rank
+    FROM cluster_stats
+)
+SELECT 
+    username,
+    ST_X(cluster_center) as lon,
+    ST_Y(cluster_center) as lat,
+    changeset_count,
+    cluster_center as location_point
+FROM ranked_clusters
+WHERE rank <= 5;  -- Show top 5 activity centers
