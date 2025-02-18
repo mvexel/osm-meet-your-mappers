@@ -1,0 +1,20 @@
+FROM ghcr.io/baosystems/postgis:17
+
+# Install build dependencies and curl (for gosu)
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git \
+    postgresql-server-dev-17 \
+    curl \
+    gosu \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone and install pg_cron
+RUN git clone https://github.com/citusdata/pg_cron.git \
+    && cd pg_cron \
+    && make && make install
+
+# Cleanup build dependencies
+RUN apt-get remove -y build-essential git postgresql-server-dev-17 curl \
+    && apt-get autoremove -y \
+    && rm -rf /pg_cron

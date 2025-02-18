@@ -53,45 +53,78 @@ CREATE TABLE IF NOT EXISTS metadata (
 );
 
 -- Activity Center view (experimental)
+CREATE EXTENSION IF NOT EXISTS pg_cron;
 
-CREATE OR REPLACE VIEW user_activity_centers AS
+CREATE MATERIALIZED VIEW user_activity_centers_mv AS
 WITH normalized_geometries AS (
     SELECT 
         username,
         CASE 
             WHEN ST_GeometryType(bbox) = 'ST_Point' THEN bbox
             ELSE ST_Centroid(bbox)
-        END AS point_geom
+        END AS point_geom,
+        EXP(EXTRACT(EPOCH FROM (NOW() - created_at)) / -31536000.0) as time_weight
     FROM changesets
     WHERE bbox IS NOT NULL 
 ),
 clustered_locations AS (
     SELECT 
         username,
-        -- eps: 0.005 (roughly 500m) for granular clusters
         ST_ClusterDBSCAN(ST_SetSRID(point_geom, 4326), eps := 0.005, minpoints := 3) 
             over (PARTITION BY username) as cluster_id,
-        point_geom
+        point_geom,
+        time_weight
     FROM normalized_geometries
 ),
-cluster_stats AS (
+cluster_centers AS (
     SELECT 
         username,
         cluster_id,
-        ST_SetSRID(ST_Centroid(ST_Collect(point_geom)), 4326) as cluster_center,
-        COUNT(*) as changeset_count
+        ST_SetSRID(
+            ST_MakePoint(
+                SUM(ST_X(point_geom) * time_weight) / SUM(time_weight),
+                SUM(ST_Y(point_geom) * time_weight) / SUM(time_weight)
+            ), 
+            4326
+        ) as cluster_center,
+        COUNT(*) as total_changesets,
+        SUM(time_weight) as weighted_score
     FROM clustered_locations
     WHERE cluster_id IS NOT NULL
     GROUP BY username, cluster_id
+),
+cluster_stats AS (
+    SELECT 
+        c.username,
+        c.cluster_id,
+        c.cluster_center,
+        c.total_changesets,
+        c.weighted_score,
+        MAX(ST_Distance(
+            c.cluster_center::geography,
+            l.point_geom::geography
+        )) as radius_meters
+    FROM cluster_centers c
+    JOIN clustered_locations l ON 
+        c.username = l.username AND 
+        c.cluster_id = l.cluster_id
+    GROUP BY 
+        c.username, 
+        c.cluster_id, 
+        c.cluster_center, 
+        c.total_changesets,
+        c.weighted_score
 ),
 ranked_clusters AS (
     SELECT 
         username,
         cluster_center,
-        changeset_count,
+        total_changesets,
+        weighted_score,
+        radius_meters,
         ROW_NUMBER() OVER (
             PARTITION BY username 
-            ORDER BY changeset_count DESC
+            ORDER BY weighted_score DESC
         ) as rank
     FROM cluster_stats
 )
@@ -99,7 +132,30 @@ SELECT
     username,
     ST_X(cluster_center) as lon,
     ST_Y(cluster_center) as lat,
-    changeset_count,
+    total_changesets,
+    weighted_score,
+    ROUND(radius_meters::numeric, 2) as radius_meters,
     cluster_center as location_point
 FROM ranked_clusters
-WHERE rank <= 5;  -- Show top 5 activity centers
+WHERE rank <= 5;
+
+-- Create indexes on the materialized view
+CREATE INDEX idx_user_activity_centers_mv_username 
+ON user_activity_centers_mv(username);
+
+CREATE INDEX idx_user_activity_centers_mv_spatial 
+ON user_activity_centers_mv USING GIST(location_point);
+
+-- Create a function to refresh the materialized view
+CREATE OR REPLACE FUNCTION refresh_user_activity_centers_mv()
+RETURNS void AS $$
+BEGIN
+    REFRESH MATERIALIZED VIEW CONCURRENTLY user_activity_centers_mv;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Schedule the refresh to run every hour
+SELECT cron.schedule('refresh_user_activity_centers', '0 * * * *', 'SELECT refresh_user_activity_centers_mv()');
+
+-- Grant necessary permissions
+GRANT SELECT ON user_activity_centers_mv TO osmuser;

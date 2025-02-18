@@ -1,13 +1,17 @@
 services:
   db:
-    image: ghcr.io/baosystems/postgis:17
+    build:
+      context: .
+      dockerfile: Dockerfile.db
     volumes:
-      - /tmp/postgresql/data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
       - ./scripts/setup_db.sql:/docker-entrypoint-initdb.d/setup_db.sql
+      - ./scripts/init_pg_cron.sh:/init-pg-cron.sh
     ports:
       - "5432:5432"
     env_file:
       - .env
+    command: ["/bin/bash", "/init-pg-cron.sh"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -42,3 +46,6 @@ services:
       - .env
     environment:
       - PYTHONPATH=/app
+
+volumes:
+  postgres_data:
