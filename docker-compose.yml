@@ -8,8 +8,7 @@ services:
       - ./scripts/setup_db.sql:/docker-entrypoint-initdb.d/setup_db.sql
     ports:
       - "5432:5432"
-    env_file:
-      - .env
+    env_file: .env
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -17,8 +16,9 @@ services:
       retries: 5
 
   api:
-    build: .
-    command: uvicorn osm_meet_your_mappers.api:app --host 0.0.0.0 --workers 4 --proxy-headers --forwarded-allow-ips "*"
+    build:
+      context: .
+      target: api
     volumes:
       - .:/app
       - ./osm_meet_your_mappers/static:/app/osm_meet_your_mappers/static
@@ -27,21 +27,34 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    env_file:
-      - .env
+    env_file: .env
     environment:
       - PYTHONPATH=/app
 
   backfill:
-    build: .
+    build:
+      context: .
+      target: backfill
     working_dir: /app
-    command: python -m scripts.backfill
     volumes:
       - .:/app
     depends_on:
       db:
         condition: service_healthy
-    env_file:
-      - .env
+    env_file: .env
+    environment:
+      - PYTHONPATH=/app
+
+  init_boundaries:
+    build:
+      context: .
+      target: init_boundaries
+    working_dir: /app
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
     environment:
       - PYTHONPATH=/app
