@@ -25,7 +25,8 @@ AND ST_Area(bbox) = 0;
 ```
 - 0937a9c071cbbd296c9dae8f82a514871a9f5ce4 Started experimenting with user activity centers
 - 36c6b1eb56e5cf02d865c92865aff45343027032 Added links to github and mastodon in footer
-- ec0855f738d372150571b3a39551053de038116e Added experimental activity view and the required plumbing for pg_cron to do the scheduld MV refresh
+- ec0855f738d372150571b3a39551053de038116e Added experimental activity view and the required plumbing for pg_cron to do the scheduld MV refresh. This will require a manual DB upgrade to install pg_cron, to be documented.
+- 552b8a36ca9912aff499c9c4c095ffc696fdc9d5 Account for empty changesets 
 
 ## [v1.0.5] - 2025-02-16
 
