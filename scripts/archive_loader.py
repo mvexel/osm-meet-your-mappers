@@ -53,6 +53,14 @@ def parse_changeset(
     except ValueError:
         return None
 
+    # Ignore changesets with no changes.s
+    try:
+        cs_changes_count = int(elem.attrib.get("num_changes", "0"))
+        if cs_changes_count == 0:
+            return None
+    except ValueError:
+        return None
+
     created_at = parse_datetime(elem.attrib.get("created_at"))
     if created_at is None:
         return None
