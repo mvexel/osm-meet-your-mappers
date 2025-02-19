@@ -2,16 +2,14 @@ services:
   db:
     build:
       context: .
-      dockerfile: Dockerfile.db
+      dockerfile: Dockerfile_db
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ${PG_DATA_HOST_PATH}:/var/lib/postgresql/data
       - ./scripts/setup_db.sql:/docker-entrypoint-initdb.d/setup_db.sql
-      - ./scripts/init_pg_cron.sh:/init-pg-cron.sh
     ports:
       - "5432:5432"
     env_file:
       - .env
-    command: ["/bin/bash", "/init-pg-cron.sh"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -27,7 +25,8 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     env_file:
       - .env
     environment:
@@ -46,6 +45,3 @@ services:
       - .env
     environment:
       - PYTHONPATH=/app
-
-volumes:
-  postgres_data:
