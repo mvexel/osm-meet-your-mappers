@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS metadata (
 -- Activity Center view (experimental)
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
+-- The weighted score represents a time-decayed count of changesets. 
+-- Clusters with more recent activity will have a higher weighted score 
+-- compared to clusters with mostly older changesets.
+--\
+-- The radius represents the geographic dispersion of the cluster
+-- Determined by the epsilon parameter for the DBScan function.
 CREATE MATERIALIZED VIEW user_activity_centers_mv AS
 WITH normalized_geometries AS (
     SELECT 
