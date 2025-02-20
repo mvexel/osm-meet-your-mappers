@@ -26,9 +26,9 @@ RUN pip install -e .
 EXPOSE 8000
 CMD ["uvicorn", "osm_meet_your_mappers.api:app", "--host", "0.0.0.0", "--workers", "4", "--proxy-headers", "--forwarded-allow-ips", "\"*\""]
 
-FROM runtime AS init_boundaries
+FROM runtime AS init_user_activity
 RUN apt-get update && apt-get install -y --no-install-recommends gdal-bin && rm -rf /var/lib/apt/lists/*
-CMD ["python", "-m", "scripts.init_boundaries"]
+CMD ["python", "-m", "scripts.init_user_activity"]
 
 FROM runtime AS backfill
 CMD ["python", "-m", "scripts.backfill"]

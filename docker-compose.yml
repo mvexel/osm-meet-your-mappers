@@ -45,10 +45,10 @@ services:
     environment:
       - PYTHONPATH=/app
 
-  init_boundaries:
+  init_user_activity:
     build:
       context: .
-      target: init_boundaries
+      target: init_user_activity
     working_dir: /app
     volumes:
       - .:/app
