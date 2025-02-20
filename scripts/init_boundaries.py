@@ -14,9 +14,12 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 
+# Use Natural Earth Adm1 by default. If you want to use something else,
+# You will need to adapt the join fields adm.admin and adm.name in the
+# user_activity_centers_mv definition (see user_activity_centers.sql)
 DATA_URL = os.environ.get(
     "ADM_BOUNDARIES_DOWNLOAD_URL",
-    "https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/geoBoundariesCGAZ_ADM1.zip",
+    "https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_1_states_provinces.zip",
 )
 POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
 POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5432")
@@ -111,9 +114,10 @@ def main():
             download_file(DATA_URL, zip_path)
             unzip_file(zip_path, extract_path)
             load_shapefile(extract_path)
-            logging.info("Initialization complete.")
+            logging.info("Geo boundaty load complete.")
 
         create_mv()
+        logging.info("Materialized view created successfully.")
     except Exception as e:
         logging.exception("An error occurred during processing.")
         sys.exit(1)
