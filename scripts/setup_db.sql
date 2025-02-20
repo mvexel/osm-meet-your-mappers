@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS changesets (
 
 CREATE INDEX IF NOT EXISTS idx_changesets_bbox_username ON changesets USING GIST (bbox, username);
 CREATE INDEX IF NOT EXISTS idx_changesets_username ON changesets using BTREE(username);
+CREATE INDEX IF NOT EXISTS idx_changesets_closed_at ON changesets using BTREE(closed_at); -- for the materialized view
+
 
 CREATE TABLE IF NOT EXISTS changeset_tags (
     id SERIAL PRIMARY KEY,
