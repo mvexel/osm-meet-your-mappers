@@ -13,7 +13,7 @@ WITH normalized_geometries AS (
             WHEN ST_GeometryType(bbox) = 'ST_Point' THEN bbox
             ELSE ST_Centroid(bbox)
         END AS point_geom,
-        EXP(EXTRACT(EPOCH FROM (NOW() - created_at)) / -31536000.0) as time_weight
+        EXP(EXTRACT(EPOCH FROM (NOW() - closed_at)) / -31536000.0) as time_weight
     FROM changesets
     WHERE bbox IS NOT NULL 
 ),
@@ -66,6 +66,7 @@ cluster_stats AS (
 ),
 ranked_clusters AS (
     SELECT 
+        cluster_id,
         username,
         cluster_center,
         total_changesets,
@@ -78,9 +79,9 @@ ranked_clusters AS (
     FROM cluster_stats
 )
 SELECT 
+    cluster_id,
     rc.username,
-    ST_X(rc.cluster_center) as lon,
-    ST_Y(rc.cluster_center) as lat,
+    cluster_center,
     rc.total_changesets,
     rc.weighted_score,
     ROUND(rc.radius_meters::numeric, 2) as radius_meters,
@@ -92,7 +93,11 @@ LEFT JOIN geoboundaries.adm1 adm
   ON ST_Within(rc.cluster_center, adm.geom)
 WHERE rc.rank <= 5;
 
--- Schedule refresh every 10 minutes
+CREATE INDEX idx_adm1_admin_name ON geoboundaries.adm1(admin, name);
+CREATE INDEX idx_user_activity_centers_mv_username ON user_activity_centers_mv(username);
+CREATE INDEX idx_user_activity_centers_mv_cluster_center ON user_activity_centers_mv USING GIST(cluster_center);
+
+-- Schedule refresh every 1h
 DO $$
 DECLARE
   r RECORD;
@@ -105,7 +110,7 @@ BEGIN
   -- Now schedule the job
   PERFORM cron.schedule(
     'refresh-user-activity-centers',
-    '*/10 * * * *',
-    'REFRESH MATERIALIZED VIEW user_activity_centers_mv'
+    '0 * * * *',
+    'REFRESH MATERIALIZED VIEW CONCURRENTLY user_activity_centers_mv'
   );
 END$$;
