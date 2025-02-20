@@ -55,4 +55,3 @@ CREATE TABLE IF NOT EXISTS metadata (
 
 -- For activity Center view (experimental)
 CREATE EXTENSION IF NOT EXISTS pg_cron;
-

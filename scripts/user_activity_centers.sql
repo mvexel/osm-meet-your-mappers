@@ -91,3 +91,21 @@ FROM ranked_clusters rc
 LEFT JOIN geoboundaries.adm1 adm
   ON ST_Within(rc.cluster_center, adm.geom)
 WHERE rc.rank <= 5;
+
+-- Schedule refresh every 10 minutes
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN SELECT jobid FROM cron.job WHERE jobname = 'refresh-user-activity-centers'
+  LOOP
+    PERFORM cron.unschedule(r.jobid);
+  END LOOP;
+  
+  -- Now schedule the job
+  PERFORM cron.schedule(
+    'refresh-user-activity-centers',
+    '*/10 * * * *',
+    'REFRESH MATERIALIZED VIEW user_activity_centers_mv'
+  );
+END$$;
