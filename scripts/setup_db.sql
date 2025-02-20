@@ -1,7 +1,9 @@
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 GRANT ALL PRIVILEGES ON DATABASE osm_db TO osmuser;
 
+-- For activity Center view (experimental)
 CREATE SCHEMA geoboundaries; -- For the admin boundaries
+CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 CREATE TABLE IF NOT EXISTS changesets (
     id SERIAL PRIMARY KEY,
@@ -55,5 +57,12 @@ CREATE TABLE IF NOT EXISTS metadata (
     timestamp TIMESTAMP
 );
 
--- For activity Center view (experimental)
-CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+SELECT cron.schedule(
+    'cleanup-old-changesets',
+    '0 0 * * *',
+    $$
+    DELETE FROM changesets 
+    WHERE closed_at < NOW() - INTERVAL $MAX_AGE$
+    $$
+);
