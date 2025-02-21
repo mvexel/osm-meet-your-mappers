@@ -293,7 +293,6 @@ SELECT
 FROM changesets
 WHERE
     max_lon - min_lon < %s AND max_lat - min_lat < %s
-AND AGE(closed_at) <= %s
 AND ST_Intersects(
         ST_MakeEnvelope(%s, %s, %s, %s, 4326), 
         bbox
@@ -307,7 +306,6 @@ ORDER BY changeset_count DESC
                 (
                     os.getenv("MAX_BBOX_FOR_LOCAL", "0.1"),
                     os.getenv("MAX_BBOX_FOR_LOCAL", "0.1"),
-                    os.getenv("MAX_AGE", "1 year"),
                     min_lon,
                     min_lat,
                     max_lon,

@@ -61,8 +61,6 @@ CREATE TABLE IF NOT EXISTS metadata (
 SELECT cron.schedule(
     'cleanup-old-changesets',
     '0 0 * * *',
-    $$
-    DELETE FROM changesets 
-    WHERE closed_at < NOW() - INTERVAL $MAX_AGE$
-    $$
+    format('DELETE FROM changesets WHERE closed_at < NOW() - interval ''%s''',
+           current_setting('app.retention_period'))
 );

@@ -9,6 +9,9 @@ services:
     ports:
       - "5432:5432"
     env_file: .env
+    environment:
+      - PGDATA=${PG_DATA_HOST_PATH}
+    command: ["postgres", "-c", "app.retention_period=${RETENTION_PERIOD}"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -27,6 +30,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      init_user_activity:
+        condition: service_completed_successfully
     env_file: .env
     environment:
       - PYTHONPATH=/app
