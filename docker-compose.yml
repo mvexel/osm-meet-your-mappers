@@ -1,16 +1,24 @@
+volumes:
+  pgdata:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=100m
+
 services:
   db:
     build:
       context: .
       dockerfile: Dockerfile_db
     volumes:
-      - ${PG_DATA_HOST_PATH}:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
       - ./scripts/setup_db.sql:/docker-entrypoint-initdb.d/setup_db.sql
     ports:
       - "5432:5432"
     env_file: .env
     environment:
-      - PGDATA=${PG_DATA_HOST_PATH}
+      - PGDATA=/var/lib/postgresql/data
     command: ["postgres", "-c", "app.retention_period=${RETENTION_PERIOD}"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
