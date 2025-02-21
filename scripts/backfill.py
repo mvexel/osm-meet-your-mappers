@@ -424,54 +424,101 @@ def catch_up_worker() -> None:
     block_size = int(os.getenv("BLOCK_SIZE", 10))
     batch_size = int(os.getenv("BATCH_SIZE", 1000))
     req_session = requests.Session()
+    last_successful_update = time.time()
+    watchdog_interval = 3600  # 1 hour in seconds
+    min_sleep_time = 60  # Minimum sleep time between iterations
 
     while True:
-        current_remote_seq = get_current_sequence()  # latest sequence OSM has
-        stored_tip, last_processed = (
-            get_stored_metadata()
-        )  # latest sequence we have and last sequence processed by the catch up worker
-
-        if stored_tip is None:
-            stored_tip = current_remote_seq
-            last_processed = current_remote_seq
-            update_metadata(stored_tip, last_processed)
-
-        logging.debug(
-            f"[{threading.current_thread().name}] Current remote sequence: {current_remote_seq}, "
-            f"Stored tip: {stored_tip}, Last processed: {last_processed}"
-        )
-
-        # Process new changesets if there are any
-        if current_remote_seq > stored_tip:
-            seq = current_remote_seq
-            while seq > stored_tip:
-                block = list(range(seq, max(stored_tip, seq - block_size), -1))
-                logging.debug(
-                    f"[{threading.current_thread().name}] Processing new block from {block[0]} down to {block[-1]}"
+        try:
+            # Watchdog check
+            if time.time() - last_successful_update > watchdog_interval:
+                logging.warning(
+                    f"[{threading.current_thread().name}] Watchdog triggered - no successful updates in {watchdog_interval} seconds. Restarting worker."
                 )
-                process_block(block, req_session, batch_size, pool_name="Catch-up")
-                seq = block[-1] - 1
-            update_metadata(current_remote_seq, seq)
-            stored_tip, last_processed = current_remote_seq, seq
+                raise RuntimeError("Watchdog timeout")
 
-        # Fill gaps
-        if last_processed < stored_tip:
-            seq = stored_tip
-            while seq > last_processed:
-                block = list(range(seq, max(last_processed, seq - block_size), -1))
-                logging.debug(
-                    f"[{threading.current_thread().name}] Filling gap from {block[0]} down to {block[-1]}"
-                )
-                process_block(block, req_session, batch_size, pool_name="Gap-fill")
-                seq = block[-1] - 1
-            update_metadata(stored_tip, seq)
+            current_remote_seq = get_current_sequence()  # latest sequence OSM has
+            stored_tip, last_processed = get_stored_metadata()
 
-        logging.info(
-            f"[{threading.current_thread().name}] Completed a pass. Sleeping before next poll..."
-        )
-        time.sleep(
-            int(os.getenv("SLEEP_TIME", 300))
-        )  # Sleep 5 minutes before checking again
+            if stored_tip is None or last_processed is None:
+                stored_tip = current_remote_seq
+                last_processed = current_remote_seq
+                update_metadata(stored_tip, last_processed)
+                last_successful_update = time.time()
+
+            logging.info(
+                f"[{threading.current_thread().name}] Current remote sequence: {current_remote_seq}, "
+                f"Stored tip: {stored_tip}, Last processed: {last_processed}"
+            )
+
+            # Process new changesets if there are any
+            if current_remote_seq > stored_tip:
+                seq = current_remote_seq
+                while seq > stored_tip:
+                    block = list(range(seq, max(stored_tip, seq - block_size), -1))
+                    logging.info(
+                        f"[{threading.current_thread().name}] Processing new block from {block[0]} down to {block[-1]}"
+                    )
+                    try:
+                        process_block(block, req_session, batch_size, pool_name="Catch-up")
+                        seq = block[-1] - 1
+                        last_successful_update = time.time()
+                    except Exception as e:
+                        logging.error(
+                            f"[{threading.current_thread().name}] Error processing block {block[0]}-{block[-1]}: {e}"
+                        )
+                        # Sleep a bit before retrying
+                        time.sleep(30)
+                        break
+
+                update_metadata(current_remote_seq, seq)
+                stored_tip, last_processed = current_remote_seq, seq
+
+            # Fill gaps
+            if last_processed < stored_tip:
+                seq = stored_tip
+                while seq > last_processed:
+                    block = list(range(seq, max(last_processed, seq - block_size), -1))
+                    logging.info(
+                        f"[{threading.current_thread().name}] Filling gap from {block[0]} down to {block[-1]}"
+                    )
+                    try:
+                        process_block(block, req_session, batch_size, pool_name="Gap-fill")
+                        seq = block[-1] - 1
+                        last_successful_update = time.time()
+                    except Exception as e:
+                        logging.error(
+                            f"[{threading.current_thread().name}] Error processing gap block {block[0]}-{block[-1]}: {e}"
+                        )
+                        # Sleep a bit before retrying
+                        time.sleep(30)
+                        break
+
+                update_metadata(stored_tip, seq)
+
+            # Update metadata periodically even if no changes
+            update_metadata(current_remote_seq, last_processed)
+            last_successful_update = time.time()
+
+            # Calculate dynamic sleep time based on how much work was done
+            sleep_time = max(min_sleep_time, int(os.getenv("SLEEP_TIME", 300)))
+            logging.info(
+                f"[{threading.current_thread().name}] Completed a pass. Sleeping for {sleep_time} seconds..."
+            )
+            time.sleep(sleep_time)
+
+        except Exception as e:
+            logging.error(
+                f"[{threading.current_thread().name}] Unhandled exception in catch-up worker: {e}"
+            )
+            # Clean up and restart
+            try:
+                req_session.close()
+                req_session = requests.Session()
+            except:
+                pass
+            # Wait before restarting
+            time.sleep(60)
 
 
 def main() -> None:
