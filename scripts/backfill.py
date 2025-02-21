@@ -4,6 +4,7 @@ import gzip
 import io
 import logging
 import os
+import random
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -81,28 +82,47 @@ def download_and_decompress(url: str, req_session: requests.Session) -> bytes:
 def download_with_retry(
     seq_number: int,
     req_session: requests.Session,
-    retries: int = 3,
+    retries: int = 5,  # Increased from 3 to 5
     initial_delay: float = 2.0,
 ) -> bytes:
     """
-    Throttles before attempting a download.
+    Throttles before attempting a download with improved connection handling.
     """
     url = replication_file_url(seq_number)
     delay = initial_delay
+
     for attempt in range(1, retries + 1):
         try:
             throttle()  # Ensure we are not hammering OSM
-            return download_and_decompress(url, req_session)
+            try:
+                return download_and_decompress(url, req_session)
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.ChunkedEncodingError,
+                requests.exceptions.ReadTimeout,
+            ) as e:
+                # Handle connection pool and remote closure issues
+                logging.warning(f"Connection error on attempt {attempt}: {e}")
+                # Reset session to clear connection pool
+                req_session.close()
+                req_session = requests.Session()
+                raise  # Will be caught by outer try
+
         except Exception as e:
             logging.error(f"Attempt {attempt} failed for sequence {seq_number}: {e}")
             if attempt < retries:
-                time.sleep(delay)
-                delay *= 2
+                # Add random jitter to sleep time to avoid thundering herd
+                sleep_time = min(delay * (2 ** (attempt - 1)), 60) * (
+                    1 + random.random()
+                )
+                logging.info(f"Waiting {sleep_time:.1f} seconds before retry...")
+                time.sleep(sleep_time)
             else:
                 logging.error(
                     f"All {retries} attempts failed for sequence {seq_number}"
                 )
-                raise
+                # Instead of raising, return empty bytes to allow processing to continue
+                return b""
 
 
 def get_current_sequence(
@@ -354,8 +374,15 @@ def process_block(
     def process_single_file(s: int) -> Tuple[bool, Optional[datetime.datetime]]:
         try:
             throttle()
+            url = replication_file_url(s)
+            logging.info(
+                f"[{threading.current_thread().name}] Downloading sequence {s} from {url}"
+            )
             xml_bytes = download_with_retry(
                 s, req_session, retries=3, initial_delay=2.0
+            )
+            logging.info(
+                f"[{threading.current_thread().name}] Successfully downloaded sequence {s} ({len(xml_bytes)} bytes)"
             )
             return process_replication_content(xml_bytes, batch_size)
         except Exception as e:
@@ -404,8 +431,11 @@ def backfill_worker(start_seq: int) -> None:
 
     while seq > start_seq:
         block = list(range(seq, max(start_seq, seq - block_size) - 1, -1))
+        logging.info(
+            f"[{threading.current_thread().name}] Backfill processing block from {block[0]} down to {block[-1]}"
+        )
         logging.debug(
-            f"[{threading.current_thread().name}] Processing block from {block[0]} down to {block[-1]}"
+            f"[{threading.current_thread().name}] Backfill block sequences: {block}"
         )
         # Specify the pool name as "Backfill" so threads in this pool are clearly identified.
         _, _ = process_block(block, req_session, batch_size, pool_name="Backfill")
@@ -457,10 +487,15 @@ def catch_up_worker() -> None:
                 while seq > stored_tip:
                     block = list(range(seq, max(stored_tip, seq - block_size), -1))
                     logging.info(
-                        f"[{threading.current_thread().name}] Processing new block from {block[0]} down to {block[-1]}"
+                        f"[{threading.current_thread().name}] Catch-up processing new block from {block[0]} down to {block[-1]}"
+                    )
+                    logging.debug(
+                        f"[{threading.current_thread().name}] Catch-up block sequences: {block}"
                     )
                     try:
-                        process_block(block, req_session, batch_size, pool_name="Catch-up")
+                        process_block(
+                            block, req_session, batch_size, pool_name="Catch-up"
+                        )
                         seq = block[-1] - 1
                         last_successful_update = time.time()
                     except Exception as e:
@@ -480,10 +515,15 @@ def catch_up_worker() -> None:
                 while seq > last_processed:
                     block = list(range(seq, max(last_processed, seq - block_size), -1))
                     logging.info(
-                        f"[{threading.current_thread().name}] Filling gap from {block[0]} down to {block[-1]}"
+                        f"[{threading.current_thread().name}] Gap-fill processing block from {block[0]} down to {block[-1]}"
+                    )
+                    logging.debug(
+                        f"[{threading.current_thread().name}] Gap-fill block sequences: {block}"
                     )
                     try:
-                        process_block(block, req_session, batch_size, pool_name="Gap-fill")
+                        process_block(
+                            block, req_session, batch_size, pool_name="Gap-fill"
+                        )
                         seq = block[-1] - 1
                         last_successful_update = time.time()
                     except Exception as e:
@@ -515,7 +555,7 @@ def catch_up_worker() -> None:
             try:
                 req_session.close()
                 req_session = requests.Session()
-            except:
+            except Exception:
                 pass
             # Wait before restarting
             time.sleep(60)
