@@ -1,34 +1,83 @@
 #!/usr/bin/env python3
-import argparse
 import bz2
+import io
 import logging
 import os
-from datetime import datetime
-from typing import Optional
-from osm_meet_your_mappers.db import get_db_connection
+import queue
+import sys
+import threading
+import time
+from datetime import datetime, timedelta, timezone
+from functools import lru_cache
+from typing import Dict, List, Tuple
 
+import psutil
 from dotenv import load_dotenv
 from lxml import etree
-from psycopg2.extras import execute_batch
-from shapely.geometry import box, Point
+from psycopg2.extras import execute_values
+from shapely import Point, box
+
+from osm_meet_your_mappers.db import get_db_connection
 
 load_dotenv()
 
-NUM_WORKERS = 4
+
+class ConfigurationError(Exception):
+    """Raised when there's an error in configuration."""
+
+    pass
 
 
-def valid_yyyymmdd(date_str):
+def get_env_config() -> Dict:
+    """Get configuration from environment variables with defaults."""
     try:
-        if len(date_str) != 8 or not date_str.isdigit():
-            raise ValueError
-        datetime.strptime(date_str, "%Y%m%d")
-        return date_str
-    except ValueError:
-        raise argparse.ArgumentTypeError(
-            f"Invalid date format: {date_str}. Expected YYYYMMDD."
+        config = {
+            "num_workers": int(os.getenv("LOADER_NUM_WORKERS", "4")),
+            "queue_size": int(os.getenv("LOADER_QUEUE_SIZE", "1000")),
+            "batch_size": int(os.getenv("LOADER_BATCH_SIZE", "50000")),
+            "retention_period": os.getenv("RETENTION_PERIOD", "365 days"),
+            "log_level": os.getenv("LOADER_LOGLEVEL", "INFO").upper(),
+            "truncate": os.getenv("LOADER_TRUNCATE", "true").lower() == "true",
+            "changeset_file": os.getenv("LOADER_CHANGESET_FILE"),
+            "buffer_size": int(os.getenv("LOADER_BUFFER_SIZE", "262144")),  # 256KB
+        }
+        try:
+            config["retention_days"] = int(config["retention_period"].split()[0])
+        except (IndexError, ValueError):
+            raise ConfigurationError("OSM_RETENTION_PERIOD must be in format 'X days'")
+
+        return config
+    except ValueError as e:
+        raise ConfigurationError(f"Configuration error: {str(e)}")
+
+
+def validate_config(config: Dict) -> None:
+    """Validate configuration values."""
+    if not config["changeset_file"]:
+        raise ConfigurationError("OSM_CHANGESET_FILE environment variable not set")
+
+    if not os.path.exists(config["changeset_file"]):
+        raise ConfigurationError(
+            f"Changeset file not found: {config['changeset_file']}"
         )
 
+    if config["num_workers"] < 1:
+        raise ConfigurationError("OSM_NUM_WORKERS must be at least 1")
 
+    if config["queue_size"] < 1:
+        raise ConfigurationError("OSM_QUEUE_SIZE must be at least 1")
+
+    if config["batch_size"] < 1:
+        raise ConfigurationError("OSM_BATCH_SIZE must be at least 1")
+
+
+def log_memory_usage():
+    process = psutil.Process()
+    memory_info = process.memory_info()
+    logging.info(f"Memory usage: {memory_info.rss / 1024 / 1024:.2f} MB")
+
+
+@lru_cache(maxsize=128)
 def parse_datetime(dt_str):
     if not dt_str:
         return None
@@ -41,34 +90,44 @@ def parse_datetime(dt_str):
         return None
 
 
-def parse_changeset(
-    elem: etree._Element,
-    from_date: Optional[datetime.date],
-    to_date: Optional[datetime.date],
-):
+def should_process_changeset(elem: etree._Element, cutoff_date: datetime) -> bool:
+    """Quick check if changeset should be processed based on closed_at date."""
+    closed_at_str = elem.attrib.get("closed_at")
+    if not closed_at_str:
+        return False
+
+    # Debug: Process the first 1000 valid changesets
+    # cs_id = int(elem.attrib.get("id", "0"))
+    # if cs_id > 0 and cs_id < 1000:
+    #     return True
+
     try:
-        cs_id = int(elem.attrib.get("id", "0"))
-        if cs_id <= 0:
-            return None
-    except ValueError:
-        return None
+        closed_at = parse_datetime(closed_at_str)
+        if closed_at is None:
+            return False
 
-    # Ignore changesets with no changes.s
-    try:
-        cs_changes_count = int(elem.attrib.get("num_changes", "0"))
-        if cs_changes_count == 0:
-            return None
-    except ValueError:
-        return None
+        # Add debug logging
+        # logging.debug(
+        #     f"Comparing dates - Closed at: {closed_at}, Cutoff: {cutoff_date}"
+        # )
 
-    created_at = parse_datetime(elem.attrib.get("created_at"))
-    if created_at is None:
-        return None
+        return closed_at >= cutoff_date
+    except Exception as e:
+        logging.debug(f"Error processing date {closed_at_str}: {e}")
+        return False
 
-    if from_date and created_at.date() < from_date:
-        return None
-    if to_date and created_at.date() > to_date:
-        return None
+
+def create_geometry(min_lon, min_lat, max_lon, max_lat):
+    if abs(min_lon - max_lon) < 1e-7 and abs(min_lat - max_lat) < 1e-7:
+        return f"POINT({min_lon} {min_lat})"
+    return f"POLYGON(({min_lon} {min_lat}, {max_lon} {min_lat}, {max_lon} {max_lat}, {min_lon} {max_lat}, {min_lon} {min_lat}))"
+
+
+def parse_changeset(elem: etree._Element) -> Tuple[Dict, List, List]:
+    """Parse a changeset element into database-ready dictionaries."""
+    cs_id = int(elem.attrib.get("id", "0"))
+    if cs_id <= 0:
+        return None, [], []
 
     min_lon = float(elem.attrib.get("min_lon", 0))
     min_lat = float(elem.attrib.get("min_lat", 0))
@@ -79,11 +138,12 @@ def parse_changeset(
         if min_lon != min_lat and max_lon != max_lat
         else Point(min_lon, min_lat)
     )
+
     cs = {
         "id": cs_id,
         "username": elem.attrib.get("user"),
         "uid": int(elem.attrib.get("uid", 0)),
-        "created_at": created_at,
+        "created_at": parse_datetime(elem.attrib.get("created_at")),
         "closed_at": parse_datetime(elem.attrib.get("closed_at")),
         "open": elem.attrib.get("open", "").lower() == "true",
         "num_changes": int(elem.attrib.get("num_changes", 0)),
@@ -92,8 +152,8 @@ def parse_changeset(
         "min_lon": min_lon,
         "max_lat": max_lat,
         "max_lon": max_lon,
+        "bbox": f"SRID=4326;{geometry.wkt}",
     }
-    cs["bbox"] = f"SRID=4326;{geometry.wkt}"
 
     tags = [
         {"changeset_id": cs_id, "k": tag.attrib["k"], "v": tag.attrib.get("v")}
@@ -117,36 +177,65 @@ def parse_changeset(
     return cs, tags, comments
 
 
+def process_batch(conn, batch_data):
+    """Process a batch of changesets and write to database."""
+    cs_batch, tag_batch, comment_batch = [], [], []
+    for cs, tags, comments in batch_data:
+        cs_batch.append(cs)
+        tag_batch.extend(tags)
+        comment_batch.extend(comments)
+
+    try:
+        insert_batch(conn, cs_batch, tag_batch, comment_batch)
+        logging.debug(f"Inserted batch of {len(cs_batch)} changesets")
+    except Exception as ex:
+        logging.error(f"Error inserting batch: {ex}")
+
+
 def insert_batch(conn, cs_batch, tag_batch, comment_batch):
     try:
         with conn.cursor() as cur:
             if cs_batch:
-                execute_batch(
-                    cur,
-                    """
-                    INSERT INTO changesets (id, username, uid, created_at, closed_at, open, num_changes, comments_count, min_lat, min_lon, max_lat, max_lon, bbox)
-                    VALUES (%(id)s, %(username)s, %(uid)s, %(created_at)s, %(closed_at)s, %(open)s, %(num_changes)s, %(comments_count)s, %(min_lat)s, %(min_lon)s, %(max_lat)s, %(max_lon)s, %(bbox)s)
-                """,
-                    cs_batch,
+                columns = (
+                    "id",
+                    "username",
+                    "uid",
+                    "created_at",
+                    "closed_at",
+                    "open",
+                    "num_changes",
+                    "comments_count",
+                    "min_lat",
+                    "min_lon",
+                    "max_lat",
+                    "max_lon",
+                    "bbox",
                 )
+                execute_values(
+                    cur,
+                    f"INSERT INTO changesets ({','.join(columns)}) VALUES %s",
+                    [tuple(cs[col] for col in columns) for cs in cs_batch],
+                )
+
             if tag_batch:
-                execute_batch(
+                columns = ("changeset_id", "k", "v")
+                execute_values(
                     cur,
-                    """
-                    INSERT INTO changeset_tags (changeset_id, k, v)
-                    VALUES (%(changeset_id)s, %(k)s, %(v)s)
-                """,
-                    tag_batch,
+                    f"INSERT INTO changeset_tags ({','.join(columns)}) VALUES %s",
+                    [tuple(tag[col] for col in columns) for tag in tag_batch],
                 )
+
             if comment_batch:
-                execute_batch(
+                columns = ("changeset_id", "uid", "username", "date", "text")
+                execute_values(
                     cur,
-                    """
-                    INSERT INTO changeset_comments (changeset_id, uid, username, date, text)
-                    VALUES (%(changeset_id)s, %(uid)s, %(username)s, %(date)s, %(text)s)
-                """,
-                    comment_batch,
+                    f"INSERT INTO changeset_comments ({','.join(columns)}) VALUES %s",
+                    [
+                        tuple(comment[col] for col in columns)
+                        for comment in comment_batch
+                    ],
                 )
+
             conn.commit()
     except Exception as ex:
         conn.rollback()
@@ -154,87 +243,225 @@ def insert_batch(conn, cs_batch, tag_batch, comment_batch):
         raise
 
 
-def process_changeset_file(
-    filename,
-    Session,
-    from_date,
-    to_date,
-    batch_size,
+def producer(
+    filename: str, work_queue: queue.Queue, cutoff_date: datetime, config: Dict
 ):
-    with bz2.open(filename, "rb") as f:
-        cs_batch, tag_batch, comment_batch = [], [], []
-        processed = 0
-        batch_counter = 0
+    """Producer function with configuration."""
+    batch = []
+    processed = 0
+    skipped = 0
+    last_log_time = time.time()
+    log_interval = 10  # Log every 10 seconds
 
-        context = etree.iterparse(f, events=("end",), tag="changeset")
-        for _, elem in context:
-            parsed = parse_changeset(elem, from_date, to_date)
-            if parsed:
-                cs, tags, comments = parsed
-                cs_batch.append(cs)
-                tag_batch.extend(tags)
-                comment_batch.extend(comments)
-                processed += 1
+    try:
+        logging.info("Starting to read bzip2 file...")
+        with bz2.open(filename, "rb") as raw_f:
+            logging.info("Successfully opened bzip2 file, creating buffered reader...")
+            f = io.BufferedReader(raw_f, buffer_size=config["buffer_size"])
+            logging.info("Starting XML parsing...")
 
-                if processed % batch_size == 0:
-                    batch_counter += 1
-                    min_created_at = min(cs["created_at"] for cs in cs_batch)
-                    logging.info(
-                        f"Queueing batch #{batch_counter} with {len(cs_batch)} changesets, starting at {min_created_at}"
-                    )
-                    insert_batch(
-                        Session, cs_batch.copy(), tag_batch.copy(), comment_batch.copy()
-                    )
-                    cs_batch.clear()
-                    tag_batch.clear()
-                    comment_batch.clear()
+            context = etree.iterparse(f, events=("start", "end"), tag="changeset")
 
-            elem.clear()
-            while elem.getprevious() is not None:
-                del elem.getparent()[0]
+            # Add counter for total elements seen (only count 'end' events)
+            total_elements = 0
 
-        if cs_batch:
-            logging.info("Inserting final batch")
-            insert_batch(Session, cs_batch, tag_batch, comment_batch)
+            for event, elem in context:
+                current_time = time.time()
 
-        logging.info(f"Finished processing {processed} changesets from chunk.")
+                # Only count 'end' events for total_elements
+                if event == "end":
+                    total_elements += 1
+
+                    if current_time - last_log_time >= log_interval:
+                        logging.info(
+                            f"Progress: processed={processed}, skipped={skipped}, "
+                            f"total_seen={total_elements}, queue_size={work_queue.qsize()}"
+                        )
+                        log_memory_usage()
+                        last_log_time = current_time
+
+                    try:
+                        if should_process_changeset(elem, cutoff_date):
+                            parsed = parse_changeset(elem)
+                            if parsed[0]:
+                                batch.append(parsed)
+                                processed += 1
+
+                                if len(batch) >= config["batch_size"]:
+                                    logging.info(
+                                        f"Queueing batch of {len(batch)} items..."
+                                    )
+                                    work_queue.put(batch)
+                                    batch = []
+                                    logging.info(
+                                        f"Batch queued. Total processed: {processed}, "
+                                        f"skipped: {skipped}, queue size: {work_queue.qsize()}"
+                                    )
+                        else:
+                            skipped += 1
+
+                    except Exception as e:
+                        logging.error(f"Error processing changeset: {e}")
+                    finally:
+                        elem.clear()
+                        while elem.getprevious() is not None:
+                            del elem.getparent()[0]
+
+        if batch:
+            logging.info(f"Queueing final batch of {len(batch)} items...")
+            work_queue.put(batch)
+
+        logging.info("Producer finished, sending termination signals...")
+        for _ in range(config["num_workers"]):
+            work_queue.put(None)
+
+    except Exception as e:
+        logging.error(f"Fatal error in producer: {e}", exc_info=True)
+        raise
+
+    logging.info(
+        f"Producer complete. Total elements seen: {total_elements}, "
+        f"processed: {processed}, skipped: {skipped}"
+    )
+
+
+def consumer(work_queue: queue.Queue, conn, config: Dict):
+    """Process batches from the work queue."""
+    processed_batches = 0
+    processed_items = 0
+    thread_name = threading.current_thread().name
+
+    logging.info(f"Consumer {thread_name} starting...")
+
+    while True:
+        try:
+            batch = work_queue.get(timeout=300)  # 5 minute timeout
+            if batch is None:  # poison pill
+                logging.info(f"Consumer {thread_name} received termination signal")
+                work_queue.task_done()
+                break
+
+            batch_size = len(batch)
+            try:
+                process_batch(conn, batch)
+                processed_batches += 1
+                processed_items += batch_size
+                logging.info(
+                    f"Consumer {thread_name}: processed batch {processed_batches} "
+                    f"({batch_size} items, total {processed_items})"
+                )
+            except Exception as e:
+                logging.error(f"Error processing batch in {thread_name}: {e}")
+            finally:
+                work_queue.task_done()
+
+        except queue.Empty:
+            logging.warning(
+                f"Consumer {thread_name}: No data received for 5 minutes, timing out"
+            )
+            break
+
+    logging.info(
+        f"Consumer {thread_name} finished. Processed {processed_batches} batches, "
+        f"{processed_items} items"
+    )
+
+
+def process_changeset_file(config: Dict):
+    """Main processing function using configuration dict."""
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=config["retention_days"])
+    # cutoff_date = datetime(2007, 1, 1, tzinfo=timezone.utc)
+
+    logging.info(f"Starting processing of {config['changeset_file']}")
+    logging.info(
+        f"Processing changesets since {cutoff_date.isoformat()} "
+        f"({config['retention_days']} days retention)"
+    )
+
+    file_size_mb = os.path.getsize(config["changeset_file"]) / (1024 * 1024)
+    logging.info(f"File size: {file_size_mb:.2f} MB")
+
+    # Create work queue
+    work_queue = queue.Queue(maxsize=config["queue_size"])
+
+    # Start producer thread
+    producer_thread = threading.Thread(
+        target=producer,
+        args=(config["changeset_file"], work_queue, cutoff_date, config),
+    )
+    producer_thread.start()
+
+    # Start consumer threads
+    consumers = []
+    for _ in range(config["num_workers"]):
+        conn = get_db_connection()
+        consumer_thread = threading.Thread(
+            target=consumer, args=(work_queue, conn, config)
+        )
+        consumer_thread.start()
+        consumers.append((consumer_thread, conn))
+
+    # Wait for all work to complete
+    producer_thread.join()
+    work_queue.join()
+
+    # Clean up connections
+    for thread, conn in consumers:
+        thread.join()
+        conn.close()
+
+    logging.info("Processing complete")
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
-    )
+    try:
+        # Load and validate configuration
+        config = get_env_config()
+        validate_config(config)
 
-    changeset_file = os.getenv("CHANGESET_FILE")
-    batch_size = int(os.getenv("BATCH_SIZE", 50000))
-    truncate = os.getenv("TRUNCATE", "true").lower() == "true"
-    from_date = os.getenv("FROM_DATE")
-    to_date = os.getenv("TO_DATE")
+        # Setup logging
+        logging.basicConfig(
+            level=config["log_level"], format="%(asctime)s %(levelname)s: %(message)s"
+        )
 
-    conn = get_db_connection()
+        # Log configuration
+        logging.info("Starting with configuration:")
+        for key, value in config.items():
+            logging.info(f"- {key}: {value}")
 
-    if truncate:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')"
-            )
-            tables_exist = cur.fetchone()[0]
-            logging.info(f"Tables exist: {tables_exist}")
-            if tables_exist:
-                logging.warning("Truncating existing tables")
+        # Initialize database
+        conn = get_db_connection()
+
+        if config["truncate"]:
+            with conn.cursor() as cur:
                 cur.execute(
-                    "TRUNCATE TABLE changesets, changeset_tags, changeset_comments CASCADE"
+                    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')"
                 )
-                conn.commit()
-            else:
-                logging.warning("Tables do not exist – ensure migration has been run.")
+                tables_exist = cur.fetchone()[0]
+                logging.info(f"Tables exist: {tables_exist}")
+                if tables_exist:
+                    logging.warning("Truncating existing tables")
+                    cur.execute(
+                        "TRUNCATE TABLE changesets, changeset_tags, changeset_comments CASCADE"
+                    )
+                    conn.commit()
+                else:
+                    logging.warning(
+                        "Tables do not exist – ensure migration has been run."
+                    )
 
-    from_date = datetime.strptime(from_date, "%Y%m%d").date() if from_date else None
-    to_date = datetime.strptime(to_date, "%Y%m%d").date() if to_date else None
-    logging.info(f"Going to process {changeset_file} from {from_date} to {to_date}")
+        # Process changesets
+        try:
+            process_changeset_file(config)
+        finally:
+            conn.close()
 
-    process_changeset_file(changeset_file, conn, from_date, to_date, batch_size)
-    conn.close()
+    except ConfigurationError as e:
+        logging.error(f"Configuration error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        logging.error(f"Fatal error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

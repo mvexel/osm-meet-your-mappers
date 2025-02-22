@@ -1,10 +1,8 @@
 volumes:
   pgdata:
     driver: local
-    driver_opts:
-      type: tmpfs
-      device: tmpfs
-      o: size=100m
+  osm_archives:
+    driver: local
 
 services:
   db:
@@ -29,7 +27,7 @@ services:
   api:
     build:
       context: .
-      target: api
+      target: runtime
     volumes:
       - .:/app
       - ./osm_meet_your_mappers/static:/app/osm_meet_your_mappers/static
@@ -47,7 +45,7 @@ services:
   backfill:
     build:
       context: .
-      target: backfill
+      target: runtime
     working_dir: /app
     volumes:
       - .:/app
@@ -61,7 +59,7 @@ services:
   init_user_activity:
     build:
       context: .
-      target: init_user_activity
+      target: runtime
     working_dir: /app
     volumes:
       - .:/app
@@ -71,3 +69,24 @@ services:
     env_file: .env
     environment:
       - PYTHONPATH=/app
+
+  load_archives:
+    build:
+      context: .
+      target: runtime
+    working_dir: /app
+    volumes:
+      - .:/app
+      - ${LOADER_CHANGESET_FILE}:/archives/changesets.osm.bz2
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+      - LOADER_CHANGESET_FILE=/archives/changesets.osm.bz2
+    profiles:
+      - load_archives
+    command: ["python", "-m", "scripts.archive_loader"]
