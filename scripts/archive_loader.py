@@ -37,7 +37,6 @@ def get_env_config() -> Dict:
             "batch_size": int(os.getenv("LOADER_BATCH_SIZE", "50000")),
             "retention_period": os.getenv("RETENTION_PERIOD", "365 days"),
             "log_level": os.getenv("LOADER_LOGLEVEL", "INFO").upper(),
-            "truncate": os.getenv("LOADER_TRUNCATE", "true").lower() == "true",
             "changeset_file": os.getenv("LOADER_CHANGESET_FILE"),
             "buffer_size": int(os.getenv("LOADER_BUFFER_SIZE", "262144")),  # 256KB
         }
@@ -471,23 +470,20 @@ def main():
         # Initialize database
         conn = get_db_connection()
 
-        if config["truncate"]:
-            with conn.cursor() as cur:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')"
+            )
+            tables_exist = cur.fetchone()[0]
+            logging.info(f"Tables exist: {tables_exist}")
+            if tables_exist:
+                logging.warning("Truncating existing tables")
                 cur.execute(
-                    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'changesets')"
+                    "TRUNCATE TABLE changesets, changeset_tags, changeset_comments CASCADE"
                 )
-                tables_exist = cur.fetchone()[0]
-                logging.info(f"Tables exist: {tables_exist}")
-                if tables_exist:
-                    logging.warning("Truncating existing tables")
-                    cur.execute(
-                        "TRUNCATE TABLE changesets, changeset_tags, changeset_comments CASCADE"
-                    )
-                    conn.commit()
-                else:
-                    logging.warning(
-                        "Tables do not exist – ensure migration has been run."
-                    )
+                conn.commit()
+            else:
+                logging.warning("Tables do not exist – ensure migration has been run.")
 
         # Process changesets
         try:

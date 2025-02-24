@@ -33,23 +33,3 @@ def get_db_connection():
     except psycopg2.OperationalError as e:
         logging.error(f"Failed to connect to database: {e}")
         raise
-
-
-def truncate_tables():
-    """
-    Truncate all tables in the database.
-    """
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "TRUNCATE TABLE changesets, changeset_tags, changeset_comments, metadata CASCADE"
-            )
-            conn.commit()
-            logging.info("All tables have been truncated successfully.")
-    except Exception as e:
-        logging.error(f"Error truncating tables: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()

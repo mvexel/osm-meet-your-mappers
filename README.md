@@ -17,7 +17,7 @@ There are a couple places you can configure stuff...
 
 - Download a changesets archive from [planet.osm.org](https://planet.osm.org)
 - Set the path to the archive file in `.env` (LOADER_CHANGESET_FILE)
-- run the initialization containers
+- run the initialization containers *WARNING* running this command will truncate the changeset tables
 
 ```bash
    docker compose --profile initialization up -d
