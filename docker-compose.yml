@@ -23,11 +23,14 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
+    profiles:
+      - initialization
+      - production
 
   api:
     build:
       context: .
-      target: runtime
+      target: api
     volumes:
       - .:/app
       - ./osm_meet_your_mappers/static:/app/osm_meet_your_mappers/static
@@ -36,16 +39,16 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      init_user_activity:
-        condition: service_completed_successfully
     env_file: .env
     environment:
       - PYTHONPATH=/app
+    profiles:
+      - production
 
   backfill:
     build:
       context: .
-      target: runtime
+      target: backfill
     working_dir: /app
     volumes:
       - .:/app
@@ -55,11 +58,13 @@ services:
     env_file: .env
     environment:
       - PYTHONPATH=/app
+    profiles:
+      - production
 
-  init_user_activity:
+  user_mv_loader:
     build:
       context: .
-      target: runtime
+      target: user_mv_loader
     working_dir: /app
     volumes:
       - .:/app
@@ -69,11 +74,13 @@ services:
     env_file: .env
     environment:
       - PYTHONPATH=/app
+    profiles:
+      - initialization
 
-  load_archives:
+  archive_loader:
     build:
       context: .
-      target: runtime
+      target: archive_loader
     working_dir: /app
     volumes:
       - .:/app
@@ -88,5 +95,4 @@ services:
       - LOG_LEVEL=DEBUG
       - LOADER_CHANGESET_FILE=/archives/changesets.osm.bz2
     profiles:
-      - load_archives
-    command: ["python", "-m", "scripts.archive_loader"]
+      - initialization
