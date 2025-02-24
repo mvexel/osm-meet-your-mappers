@@ -5,9 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+ ## [1.0.6] - 2025-02-24
 
-- cfb0334a79341a148e6d4358f2b9e8ebb83cd720 Fix model and ingest script to allow for changeset bounds that are points. When upgrading from a previous version, manually alter the `changesets` table:
+ ### Added
+ - Geo boundaries support with optimized Docker builds
+ - Retention period environment variable for data management
+ - Cron scheduling for automated tasks
+ - Changeset cleanup job for database maintenance
+ - Additional indices on changesets table
+ - Retry delay mechanism for better resiliency
+
+ ### Changed
+ - Optimized materialized views with tweaks and indices
+ - Improved archive loader resilience and performance
+ - Enhanced database connection resilience with retry logic
+ - Cleaned up Dockerfile and Docker Compose configuration
+ - Updated database path in Docker Compose configuration
+ - Added volume support for database persistence
+
+ ### Fixed
+ - Various naming inconsistencies
+ - Improved documentation and README clarifications
+ - Fixed environment variable documentation
+
+### Notes
+
+When upgrading from a previous version, manually alter the `changesets` table:
 ```SQL
 ALTER TABLE changesets 
 ALTER COLUMN bbox TYPE geometry(Geometry,4326);
@@ -23,10 +46,6 @@ SET bbox = ST_Point(
 WHERE ST_GeometryType(bbox) = 'ST_Polygon' 
 AND ST_Area(bbox) = 0;
 ```
-- 0937a9c071cbbd296c9dae8f82a514871a9f5ce4 Started experimenting with user activity centers
-- 36c6b1eb56e5cf02d865c92865aff45343027032 Added links to github and mastodon in footer
-- ec0855f738d372150571b3a39551053de038116e Added experimental activity view and the required plumbing for pg_cron to do the scheduld MV refresh. This will require a manual DB upgrade to install pg_cron, to be documented.
-- 552b8a36ca9912aff499c9c4c095ffc696fdc9d5 Account for empty changesets 
 
 ## [v1.0.5] - 2025-02-16
 
