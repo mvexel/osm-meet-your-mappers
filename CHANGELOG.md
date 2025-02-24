@@ -30,22 +30,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Notes
 
-When upgrading from a previous version, manually alter the `changesets` table:
+When upgrading from a previous version, you need to update the DB:
 ```SQL
-ALTER TABLE changesets 
-ALTER COLUMN bbox TYPE geometry(Geometry,4326);
-```
-And convert the invalid polygons to valid points:
-```
-UPDATE changesets
-SET bbox = ST_Point(
-    ST_X(ST_PointN(ST_ExteriorRing(bbox), 1)),
-    ST_Y(ST_PointN(ST_ExteriorRing(bbox), 1)),
-    4326
-)
-WHERE ST_GeometryType(bbox) = 'ST_Polygon' 
-AND ST_Area(bbox) = 0;
-```
+ -- Add new indices for performance
+ CREATE INDEX IF NOT EXISTS idx_changesets_closed_at ON changesets(closed_at);
+ CREATE INDEX IF NOT EXISTS idx_user_activity_centers_mv_username ON user_activity_centers_mv(username);
+ CREATE INDEX IF NOT EXISTS idx_user_activity_centers_mv_cluster_center ON user_activity_centers_mv USING GIST(cluster_center);
+
+ -- Add pg_cron extension if not exists
+ CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+ -- Schedule cleanup job
+ SELECT cron.schedule(
+     'cleanup-old-changesets',
+     '0 0 * * *', -- Runs daily at midnight
+     format('DELETE FROM changesets WHERE closed_at < NOW() - interval ''%s''',
+            current_setting('app.retention_period'))
+ );
+
+ -- Create materialized view for user activity centers
+ CREATE MATERIALIZED VIEW user_activity_centers_mv AS
+ WITH normalized_geometries AS (
+     SELECT
+         username,
+         CASE
+             WHEN ST_GeometryType(bbox) = 'ST_Point' THEN bbox
+             ELSE ST_Centroid(bbox)
+         END AS point_geom,
+         EXP(EXTRACT(EPOCH FROM (NOW() - closed_at)) / -31536000.0) as time_weight
+     FROM changesets
+     WHERE bbox IS NOT NULL
+ ),
+ clustered_locations AS (
+     SELECT
+         username,
+         ST_ClusterDBSCAN(ST_SetSRID(point_geom, 4326), eps := 0.005, minpoints := 3)
+             OVER (PARTITION BY username) as cluster_id,
+         point_geom,
+         time_weight
+     FROM normalized_geometries
+ ),
+ -- ... (rest of the materialized view definition from user_activity_centers.sql)
+
+ -- Schedule MV refresh
+ DO $$
+ BEGIN
+   PERFORM cron.schedule(
+     'refresh-user-activity-centers',
+     '0 * * * *', -- Runs every hour
+     'REFRESH MATERIALIZED VIEW CONCURRENTLY user_activity_centers_mv'
+   );
+ END $$;
+
+ -- Create geoboundaries schema and table
+ CREATE SCHEMA IF NOT EXISTS geoboundaries;
+ CREATE TABLE IF NOT EXISTS geoboundaries.adm1 (
+     admin VARCHAR(255),
+     name VARCHAR(255),
+     geom GEOMETRY(MultiPolygon, 4326)
+ );
+ CREATE INDEX IF NOT EXISTS idx_adm1_admin_name ON geoboundaries.adm1(admin, name);
+ ```
 
 ## [v1.0.5] - 2025-02-16
 
