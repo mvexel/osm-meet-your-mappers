@@ -96,20 +96,10 @@ def should_process_changeset(elem: etree._Element, cutoff_date: datetime) -> boo
     if not closed_at_str:
         return False
 
-    # Debug: Process the first 1000 valid changesets
-    # cs_id = int(elem.attrib.get("id", "0"))
-    # if cs_id > 0 and cs_id < 1000:
-    #     return True
-
     try:
         closed_at = parse_datetime(closed_at_str)
         if closed_at is None:
             return False
-
-        # Add debug logging
-        # logging.debug(
-        #     f"Comparing dates - Closed at: {closed_at}, Cutoff: {cutoff_date}"
-        # )
 
         return closed_at >= cutoff_date
     except Exception as e:
@@ -180,22 +170,31 @@ def parse_changeset(elem: etree._Element) -> Tuple[Dict, List, List]:
 def process_batch(conn, batch_data):
     """Process a batch of changesets and write to database."""
     cs_batch, tag_batch, comment_batch = [], [], []
+
+    logging.debug(f"Starting to process batch of {len(batch_data)} items")
+
     for cs, tags, comments in batch_data:
         cs_batch.append(cs)
         tag_batch.extend(tags)
         comment_batch.extend(comments)
 
     try:
+        logging.debug(
+            f"Attempting to insert batch: {len(cs_batch)} changesets, "
+            f"{len(tag_batch)} tags, {len(comment_batch)} comments"
+        )
         insert_batch(conn, cs_batch, tag_batch, comment_batch)
-        logging.debug(f"Inserted batch of {len(cs_batch)} changesets")
+        logging.debug(f"Successfully inserted batch of {len(cs_batch)} changesets")
     except Exception as ex:
-        logging.error(f"Error inserting batch: {ex}")
+        logging.error(f"Error inserting batch: {ex}", exc_info=True)
+        raise
 
 
 def insert_batch(conn, cs_batch, tag_batch, comment_batch):
     try:
         with conn.cursor() as cur:
             if cs_batch:
+                logging.debug(f"Inserting {len(cs_batch)} changesets")
                 columns = (
                     "id",
                     "username",
@@ -218,6 +217,7 @@ def insert_batch(conn, cs_batch, tag_batch, comment_batch):
                 )
 
             if tag_batch:
+                logging.debug(f"Inserting {len(tag_batch)} tags")
                 columns = ("changeset_id", "k", "v")
                 execute_values(
                     cur,
@@ -226,6 +226,7 @@ def insert_batch(conn, cs_batch, tag_batch, comment_batch):
                 )
 
             if comment_batch:
+                logging.debug(f"Inserting {len(comment_batch)} comments")
                 columns = ("changeset_id", "uid", "username", "date", "text")
                 execute_values(
                     cur,
@@ -237,9 +238,10 @@ def insert_batch(conn, cs_batch, tag_batch, comment_batch):
                 )
 
             conn.commit()
+            logging.debug("Successfully committed batch to database")
     except Exception as ex:
         conn.rollback()
-        logging.error("Error during batch insert: %s", ex)
+        logging.error("Error during batch insert: %s", ex, exc_info=True)
         raise
 
 
@@ -252,25 +254,29 @@ def producer(
     skipped = 0
     last_log_time = time.time()
     log_interval = 10  # Log every 10 seconds
+    queue_high_water_mark = config["queue_size"] * 0.8  # 80% of max queue size
 
     try:
         logging.info("Starting to read bzip2 file...")
-        with bz2.open(filename, "rb") as raw_f:
+        with bz2.open(filename, "rb") as raw_f, io.BufferedReader(
+            raw_f, buffer_size=config["buffer_size"]
+        ) as f:
             logging.info("Successfully opened bzip2 file, creating buffered reader...")
-            f = io.BufferedReader(raw_f, buffer_size=config["buffer_size"])
             logging.info("Starting XML parsing...")
 
             context = etree.iterparse(f, events=("start", "end"), tag="changeset")
-
-            # Add counter for total elements seen (only count 'end' events)
             total_elements = 0
 
             for event, elem in context:
                 current_time = time.time()
 
-                # Only count 'end' events for total_elements
                 if event == "end":
                     total_elements += 1
+
+                    # Add backpressure when queue is getting full
+                    while work_queue.qsize() >= queue_high_water_mark:
+                        logging.debug("Queue nearly full, sleeping...")
+                        time.sleep(1)
 
                     if current_time - last_log_time >= log_interval:
                         logging.info(
@@ -288,15 +294,24 @@ def producer(
                                 processed += 1
 
                                 if len(batch) >= config["batch_size"]:
-                                    logging.info(
+                                    logging.debug(
                                         f"Queueing batch of {len(batch)} items..."
                                     )
-                                    work_queue.put(batch)
-                                    batch = []
-                                    logging.info(
-                                        f"Batch queued. Total processed: {processed}, "
-                                        f"skipped: {skipped}, queue size: {work_queue.qsize()}"
-                                    )
+                                    # Add timeout to queue.put()
+                                    try:
+                                        work_queue.put(
+                                            batch, timeout=300
+                                        )  # 5 minute timeout
+                                        batch = []
+                                        logging.debug(
+                                            f"Batch queued. Total processed: {processed}, "
+                                            f"skipped: {skipped}, queue size: {work_queue.qsize()}"
+                                        )
+                                    except queue.Full:
+                                        logging.error(
+                                            "Queue full after timeout, exiting"
+                                        )
+                                        raise
                         else:
                             skipped += 1
 
@@ -309,14 +324,23 @@ def producer(
 
         if batch:
             logging.info(f"Queueing final batch of {len(batch)} items...")
-            work_queue.put(batch)
+            work_queue.put(batch, timeout=300)
 
         logging.info("Producer finished, sending termination signals...")
         for _ in range(config["num_workers"]):
-            work_queue.put(None)
+            work_queue.put(None, timeout=300)
 
     except Exception as e:
-        logging.error(f"Fatal error in producer: {e}", exc_info=True)
+        logging.error(
+            f"Fatal error in producer: {e}. Are you sure the file exists on the host file system?",
+            exc_info=True,
+        )
+        # Make sure to send termination signals even on error
+        for _ in range(config["num_workers"]):
+            try:
+                work_queue.put(None, timeout=10)
+            except queue.Full:
+                pass
         raise
 
     logging.info(
@@ -326,16 +350,18 @@ def producer(
 
 
 def consumer(work_queue: queue.Queue, conn, config: Dict):
-    """Process batches from the work queue."""
+    """Process batches from the work queue with longer timeout."""
     processed_batches = 0
     processed_items = 0
     thread_name = threading.current_thread().name
+    TIMEOUT = 3600  # 1 hour timeout
 
     logging.info(f"Consumer {thread_name} starting...")
 
     while True:
         try:
-            batch = work_queue.get(timeout=300)  # 5 minute timeout
+            batch = work_queue.get(timeout=TIMEOUT)  # 1 hour timeout
+
             if batch is None:  # poison pill
                 logging.info(f"Consumer {thread_name} received termination signal")
                 work_queue.task_done()
@@ -357,7 +383,7 @@ def consumer(work_queue: queue.Queue, conn, config: Dict):
 
         except queue.Empty:
             logging.warning(
-                f"Consumer {thread_name}: No data received for 5 minutes, timing out"
+                f"Consumer {thread_name}: No data received for {TIMEOUT} seconds, timing out"
             )
             break
 
@@ -368,9 +394,8 @@ def consumer(work_queue: queue.Queue, conn, config: Dict):
 
 
 def process_changeset_file(config: Dict):
-    """Main processing function using configuration dict."""
+    """Main processing function with delayed consumer start."""
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=config["retention_days"])
-    # cutoff_date = datetime(2007, 1, 1, tzinfo=timezone.utc)
 
     logging.info(f"Starting processing of {config['changeset_file']}")
     logging.info(
@@ -391,12 +416,26 @@ def process_changeset_file(config: Dict):
     )
     producer_thread.start()
 
+    # Wait for the first batch to be available before starting consumers
+    logging.info("Waiting for initial data from producer...")
+    while producer_thread.is_alive():
+        if not work_queue.empty():
+            break
+        time.sleep(10)  # Check every 10 seconds
+        logging.info("Still waiting for initial data...")
+
+    if not producer_thread.is_alive() and work_queue.empty():
+        logging.error("Producer terminated without producing any data")
+        return
+
+    logging.info("Initial data available, starting consumers...")
+
     # Start consumer threads
     consumers = []
-    for _ in range(config["num_workers"]):
+    for i in range(config["num_workers"]):
         conn = get_db_connection()
         consumer_thread = threading.Thread(
-            target=consumer, args=(work_queue, conn, config)
+            target=consumer, args=(work_queue, conn, config), name=f"Consumer-{i}"
         )
         consumer_thread.start()
         consumers.append((consumer_thread, conn))

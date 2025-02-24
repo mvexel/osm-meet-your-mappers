@@ -82,7 +82,7 @@ def download_and_decompress(url: str, req_session: requests.Session) -> bytes:
 def download_with_retry(
     seq_number: int,
     req_session: requests.Session,
-    retries: int = 5,  # Increased from 3 to 5
+    retries: int = 5,
     initial_delay: float = 2.0,
 ) -> bytes:
     """
@@ -131,7 +131,7 @@ def get_current_sequence(
     """
     Retrieve the current replication sequence number from the state YAML file.
     """
-    throttle()  # throttle even on state retrieval
+    throttle()
     response = requests.get(state_url)
     response.raise_for_status()
     state = yaml.safe_load(response.text)
@@ -219,7 +219,7 @@ def process_replication_content(
     stream = io.BytesIO(xml_bytes)
     context = etree.iterparse(stream, events=("end",), tag="changeset")
     for _, elem in context:
-        parsed = parse_changeset(elem, None, None)
+        parsed = parse_changeset(elem)
         if parsed:
             cs, tags, comments = parsed
             if not cs["open"]:
@@ -437,7 +437,6 @@ def backfill_worker(start_seq: int) -> None:
         logging.debug(
             f"[{threading.current_thread().name}] Backfill block sequences: {block}"
         )
-        # Specify the pool name as "Backfill" so threads in this pool are clearly identified.
         _, _ = process_block(block, req_session, batch_size, pool_name="Backfill")
         seq = block[-1] - 1
         update_metadata(stored_tip, seq)
@@ -467,7 +466,7 @@ def catch_up_worker() -> None:
                 )
                 raise RuntimeError("Watchdog timeout")
 
-            current_remote_seq = get_current_sequence()  # latest sequence OSM has
+            current_remote_seq = get_current_sequence()
             stored_tip, last_processed = get_stored_metadata()
 
             if stored_tip is None or last_processed is None:
@@ -481,7 +480,6 @@ def catch_up_worker() -> None:
                 f"Stored tip: {stored_tip}, Last processed: {last_processed}"
             )
 
-            # Process new changesets if there are any
             if current_remote_seq > stored_tip:
                 seq = current_remote_seq
                 while seq > stored_tip:

@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 from dotenv import load_dotenv
 import requests
-import psycopg2
+from osm_meet_your_mappers.db import get_db_connection
 
 load_dotenv()
 
@@ -21,17 +21,11 @@ DATA_URL = os.environ.get(
     "ADM_BOUNDARIES_DOWNLOAD_URL",
     "https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_1_states_provinces.zip",
 )
-POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5432")
-POSTGRES_USER = os.environ.get("POSTGRES_USER", "osmuser")
-POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "osmpass")
-POSTGRES_DB = os.environ.get("POSTGRES_DB", "osm_db")
-CONN_STR = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
 
 
 def create_schema():
     """Create schema if not exists."""
-    with psycopg2.connect(CONN_STR) as conn, conn.cursor() as cur:
+    with get_db_connection() as conn, conn.cursor() as cur:
         cur.execute("CREATE SCHEMA IF NOT EXISTS geoboundaries;")
 
 
@@ -64,12 +58,18 @@ def load_shapefile(extract_path: Path):
     shp_file = shp_files[0]
     logging.info(f"Found shapefile: {shp_file}")
 
+    pg_host = os.environ.get("POSTGRES_HOST", "localhost")
+    pg_port = os.environ.get("POSTGRES_PORT", "5432")
+    pg_user = os.environ.get("POSTGRES_USER", "osmuser")
+    pg_password = os.environ.get("POSTGRES_PASSWORD", "osmpass")
+    pg_dbname = os.environ.get("POSTGRES_DB", "osm_db")
+    dsn = f"postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_dbname}"
+
     ogr_cmd = [
         "ogr2ogr",
         "-f",
         "PostgreSQL",
-        CONN_STR,
-        str(shp_file),
+        dsn,
         "-a_srs",
         "EPSG:4326",
         "-lco",
@@ -79,8 +79,9 @@ def load_shapefile(extract_path: Path):
         "-nln",
         "geoboundaries.adm1",
         "-overwrite",
+        str(shp_file),
     ]
-    logging.info("Executing command: " + " ".join(ogr_cmd))
+    logging.debug(f"Executing command: {" ".join(ogr_cmd)}")
     subprocess.run(ogr_cmd, check=True)
     logging.info("Shapefile successfully loaded into the database.")
 
@@ -91,7 +92,7 @@ def create_mv():
     """
     with open("scripts/user_activity_centers.sql", "r") as f:
         sql = f.read()
-        conn = psycopg2.connect(CONN_STR)
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(sql)
         conn.commit()
