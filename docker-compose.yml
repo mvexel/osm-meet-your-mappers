@@ -57,10 +57,10 @@ services:
     profiles:
       - production
 
-  user_mv_loader:
+  load_admin_boundaries:
     build:
       context: .
-      target: user_mv_loader
+      target: load_admin_boundaries
     working_dir: /app
     volumes:
       - .:/app
