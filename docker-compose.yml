@@ -70,6 +70,7 @@ services:
     env_file: .env
     environment:
       - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
     profiles:
       - initialization
 
@@ -88,7 +89,6 @@ services:
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=DEBUG
       - LOADER_CHANGESET_FILE=/archives/changesets.osm.bz2
     profiles:
       - initialization

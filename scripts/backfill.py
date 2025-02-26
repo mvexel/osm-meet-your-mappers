@@ -1,594 +1,212 @@
 #!/usr/bin/env python3
-import datetime
 import gzip
 import io
 import logging
-import os
-import random
-import threading
+import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Optional, Set, Tuple
+from datetime import datetime
+from typing import Optional, Tuple, List
 
 import requests
 import yaml
-from dotenv import load_dotenv
 from lxml import etree
-
+from osm_meet_your_mappers.config import get_env_config, validate_config
 from osm_meet_your_mappers.db import get_db_connection
-from scripts.archive_loader import insert_batch, parse_changeset
+from osm_meet_your_mappers.db_utils import get_duplicate_ids, upsert_changesets
+from osm_meet_your_mappers.parsers import parse_changeset
 
+# Load environment variables
+config = get_env_config()
+validate_config(config)
 
-def get_duplicate_ids(db_connection, cs_list: List[dict]) -> Set[int]:
-    """
-    Given a list of changeset dictionaries (each with an "id" key),
-    return the set of IDs that already exist in the database.
-    """
-    cs_ids = [cs["id"] for cs in cs_list]
-    with db_connection.cursor() as cur:
-        cur.execute("SELECT id FROM changesets WHERE id = ANY(%s)", (cs_ids,))
-        existing = cur.fetchall()
-    return {row[0] for row in existing}
+# Logging configuration
+logging.basicConfig(
+    level=config["log_level"],
+    format="%(asctime)s %(levelname)s: %(message)s",
+)
 
-
-load_dotenv()
-
-conn = get_db_connection()
-
-# Global locks for insert and metadata updates.
-insert_lock = threading.Lock()
-metadata_lock = threading.Lock()
-
-# Throttling globals
-THROTTLE_DELAY = float(os.getenv("THROTTLE_DELAY", "1.0"))  # seconds between requests
-last_request_time = 0
-throttle_lock = threading.Lock()
+THROTTLE_DELAY = float(config.get("throttle_delay", 1.0))
 
 
 def throttle() -> None:
-    """
-    Ensures that each request is delayed by at least THROTTLE_DELAY seconds.
-    """
-    global last_request_time
-    with throttle_lock:
-        now = time.time()
-        wait_time = THROTTLE_DELAY - (now - last_request_time)
-        if wait_time > 0:
-            time.sleep(wait_time)
-        last_request_time = time.time()
+    """Delay to avoid overwhelming OSM servers."""
+    time.sleep(THROTTLE_DELAY)
 
 
-def replication_file_url(
-    seq_number: int,
-    base_url: str = os.getenv(
-        "REPLICATION_BASE_URL", "https://planet.osm.org/replication/changesets"
-    ),
-) -> str:
-    """
-    Build the URL for the replication file corresponding to a given sequence number.
-    """
+def replication_file_url(seq_number: int) -> str:
     seq_str = f"{seq_number:09d}"
     dir1, dir2, file_part = seq_str[:3], seq_str[3:6], seq_str[6:]
+    base_url = config.get(
+        "replication_base_url", "https://planet.osm.org/replication/changesets"
+    )
     return f"{base_url}/{dir1}/{dir2}/{file_part}.osm.gz"
 
 
-def download_and_decompress(url: str, req_session: requests.Session) -> bytes:
+def download_and_decompress(url: str) -> bytes:
     logging.debug(f"Downloading {url}")
-    response = req_session.get(url)
+    response = requests.get(url, allow_redirects=True)
+
+    if response.status_code == 404:
+        logging.warning(f"Replication file not found at {url}. Skipping.")
+        raise FileNotFoundError
+
     response.raise_for_status()
     return gzip.decompress(response.content)
 
 
-def download_with_retry(
-    seq_number: int,
-    req_session: requests.Session,
-    retries: int = 5,
-    initial_delay: float = 2.0,
-) -> bytes:
-    """
-    Throttles before attempting a download with improved connection handling.
-    """
-    url = replication_file_url(seq_number)
-    delay = initial_delay
-
-    for attempt in range(1, retries + 1):
-        try:
-            throttle()  # Ensure we are not hammering OSM
-            try:
-                return download_and_decompress(url, req_session)
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ChunkedEncodingError,
-                requests.exceptions.ReadTimeout,
-            ) as e:
-                # Handle connection pool and remote closure issues
-                logging.warning(f"Connection error on attempt {attempt}: {e}")
-                # Reset session to clear connection pool
-                req_session.close()
-                req_session = requests.Session()
-                raise  # Will be caught by outer try
-
-        except Exception as e:
-            logging.error(f"Attempt {attempt} failed for sequence {seq_number}: {e}")
-            if attempt < retries:
-                # Add random jitter to sleep time to avoid thundering herd
-                sleep_time = min(delay * (2 ** (attempt - 1)), 60) * (
-                    1 + random.random()
-                )
-                logging.info(f"Waiting {sleep_time:.1f} seconds before retry...")
-                time.sleep(sleep_time)
-            else:
-                logging.error(
-                    f"All {retries} attempts failed for sequence {seq_number}"
-                )
-                # Instead of raising, return empty bytes to allow processing to continue
-                return b""
-
-
-def get_current_sequence(
-    state_url: str = "https://planet.osm.org/replication/changesets/state.yaml",
-) -> int:
-    """
-    Retrieve the current replication sequence number from the state YAML file.
-    """
-    throttle()
-    response = requests.get(state_url)
-    response.raise_for_status()
-    state = yaml.safe_load(response.text)
-    sequence = int(state["sequence"])
-    logging.debug(f"Current replication state sequence: {sequence}")
-    return sequence
-
-
-def upsert_changesets(
-    conn, cs_batch: List[dict], tag_batch: List[dict], comment_batch: List[dict]
+def update_sequence_status(
+    seq_number: int, status: str, error_message: Optional[str] = None
 ) -> None:
-    """
-    Upsert changesets into the database. If a changeset already exists, update it.
-    """
+    """Update the sequences table with the current status."""
+    conn = get_db_connection()
     with conn.cursor() as cur:
-        for cs in cs_batch:
-            cur.execute(
-                """
-                INSERT INTO changesets (id, created_at, closed_at, open, user_id, user_name, num_changes)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (id) DO UPDATE SET
-                closed_at = EXCLUDED.closed_at,
-                open = EXCLUDED.open,
-                num_changes = EXCLUDED.num_changes
-                WHERE changesets.closed_at < EXCLUDED.closed_at OR changesets.open <> EXCLUDED.open;
-            """,
-                (
-                    cs["id"],
-                    cs["created_at"],
-                    cs["closed_at"],
-                    cs["open"],
-                    cs["user_id"],
-                    cs["user_name"],
-                    cs["num_changes"],
-                ),
-            )
+        cur.execute(
+            """
+            INSERT INTO sequences (sequence_number, status, error_message)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (sequence_number) DO UPDATE
+            SET status = EXCLUDED.status,
+                error_message = EXCLUDED.error_message,
+                ingested_at = NOW();
+        """,
+            (seq_number, status, error_message),
+        )
+        conn.commit()
+    conn.close()
 
-        for tag in tag_batch:
-            cur.execute(
-                """
-                INSERT INTO changeset_tags (changeset_id, key, value)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (changeset_id, key) DO UPDATE SET
-                value = EXCLUDED.value;
-            """,
-                (tag["changeset_id"], tag["key"], tag["value"]),
-            )
 
-        for comment in comment_batch:
-            cur.execute(
-                """
-                INSERT INTO changeset_comments (changeset_id, user_id, user_name, date, text)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (changeset_id, user_id, date) DO UPDATE SET
-                text = EXCLUDED.text;
-            """,
-                (
-                    comment["changeset_id"],
-                    comment["user_id"],
-                    comment["user_name"],
-                    comment["date"],
-                    comment["text"],
-                ),
-            )
+def insert_changeset_batch(cs_batch: List[dict]) -> int:
+    """Insert a batch of changesets into the database."""
+    conn = get_db_connection()
+    try:
+        dup_ids = get_duplicate_ids(conn, cs_batch)
+        new_cs_batch = [cs for cs in cs_batch if cs["id"] not in dup_ids]
 
-    conn.commit()
+        if not new_cs_batch:
+            return 0
+
+        for cs in new_cs_batch:
+            if not cs.get("bbox") or cs["bbox"] in ("POINT(0 0)", ""):
+                logging.warning(f"Changeset {cs['id']} has invalid geometry, skipping.")
+                cs["bbox"] = None
+
+        upsert_changesets(conn, new_cs_batch)
+        logging.info(f"Inserted {len(new_cs_batch)} new changesets.")
+        return len(new_cs_batch)
+    finally:
+        conn.close()
+
+
+def get_most_recent_closed_at() -> Optional[datetime]:
+    """Get the most recent closed_at date from the changesets table."""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT MAX(closed_at) FROM changesets;")
+            result = cur.fetchone()
+            return result[0] if result and result[0] else None
+    finally:
+        conn.close()
 
 
 def process_replication_content(
-    xml_bytes: bytes, batch_size: int
-) -> Tuple[bool, Optional[datetime.datetime]]:
-    """
-    Process the XML content of a replication file. Only closed changesets are processed.
-
-    Returns:
-      (file_empty, min_new_timestamp)
-    """
-    cs_batch: List[dict] = []
-    tag_batch: List[dict] = []
-    comment_batch: List[dict] = []
-    processed = 0
-    new_changesets_in_file = 0
-    min_new_ts: Optional[datetime.datetime] = None
-
+    xml_bytes: bytes, batch_size: int, cutoff_date: datetime
+) -> Tuple[int, bool]:
+    """Parse and insert changesets; stop if cutoff_date is reached."""
+    cs_batch, inserted_count, reached_cutoff = [], 0, False
     stream = io.BytesIO(xml_bytes)
     context = etree.iterparse(stream, events=("end",), tag="changeset")
+
     for _, elem in context:
-        parsed = parse_changeset(elem)
-        if parsed:
-            cs, tags, comments = parsed
-            if not cs["open"]:
-                cs_batch.append(cs)
-                tag_batch.extend(tags)
-                comment_batch.extend(comments)
-            processed += 1
+        cs = parse_changeset(elem)
+        if cs and not cs["open"]:
+            closed_at = (
+                datetime.fromisoformat(cs["closed_at"]) if cs["closed_at"] else None
+            )
+
+            if closed_at and closed_at <= cutoff_date:
+                logging.info(f"Reached cutoff date: {closed_at}. Stopping backfill.")
+                reached_cutoff = True
+                break
+
+            cs_batch.append(cs)
             if len(cs_batch) >= batch_size:
-                with insert_lock:
-                    dup_ids = get_duplicate_ids(conn, cs_batch)
-                    new_cs_batch = [cs for cs in cs_batch if cs["id"] not in dup_ids]
-                    new_tag_batch = [
-                        tag for tag in tag_batch if tag["changeset_id"] not in dup_ids
-                    ]
-                    new_comment_batch = [
-                        comment
-                        for comment in comment_batch
-                        if comment["changeset_id"] not in dup_ids
-                    ]
-                    if new_cs_batch:
-                        batch_min = min(cs["created_at"] for cs in new_cs_batch)
-                        if min_new_ts is None or batch_min < min_new_ts:
-                            min_new_ts = batch_min
-                        new_count = len(new_cs_batch)
-                        most_recent_closed_at = max(
-                            cs["created_at"] for cs in new_cs_batch
-                        )
-                        logging.info(
-                            f"[{threading.current_thread().name}] Inserting {new_count} changesets, newest closed_at: {most_recent_closed_at}, id: {new_cs_batch[-1]['id']}"
-                        )
-                        upsert_changesets(
-                            conn, new_cs_batch, new_tag_batch, new_comment_batch
-                        )
+                inserted_count += insert_changeset_batch(cs_batch)
                 cs_batch.clear()
-                tag_batch.clear()
-                comment_batch.clear()
 
         elem.clear()
         while elem.getprevious() is not None:
             del elem.getparent()[0]
 
-    if cs_batch:
-        with insert_lock:
-            dup_ids = get_duplicate_ids(conn, cs_batch)
-            new_cs_batch = [cs for cs in cs_batch if cs["id"] not in dup_ids]
-            new_tag_batch = [
-                tag for tag in tag_batch if tag["changeset_id"] not in dup_ids
-            ]
-            new_comment_batch = [
-                comment
-                for comment in comment_batch
-                if comment["changeset_id"] not in dup_ids
-            ]
-            if new_cs_batch:
-                batch_min = min(cs["created_at"] for cs in new_cs_batch)
-                if min_new_ts is None or batch_min < min_new_ts:
-                    min_new_ts = batch_min
-                new_count = len(new_cs_batch)
-                most_recent_closed_at = max(cs["created_at"] for cs in new_cs_batch)
-                logging.info(
-                    f"[{threading.current_thread().name}] Inserting {new_count} changesets, newest closed_at: {most_recent_closed_at}, id: {new_cs_batch[-1]['id']}"
-                )
-                insert_batch(conn, new_cs_batch, new_tag_batch, new_comment_batch)
-    logging.debug(
-        f"[{threading.current_thread().name}] Finished processing replication file: {processed} closed changesets parsed. New changesets: {new_changesets_in_file}"
+    if cs_batch and not reached_cutoff:
+        inserted_count += insert_changeset_batch(cs_batch)
+
+    return inserted_count, reached_cutoff
+
+
+def process_sequence(seq_number: int, batch_size: int, cutoff_date: datetime) -> bool:
+    """Process a single sequence; returns True if cutoff reached."""
+    url = replication_file_url(seq_number)
+    update_sequence_status(seq_number, "processing")
+
+    try:
+        xml_bytes = download_and_decompress(url)
+        inserted, reached_cutoff = process_replication_content(
+            xml_bytes, batch_size, cutoff_date
+        )
+
+        if reached_cutoff:
+            update_sequence_status(seq_number, "backfilled")
+            return True  # Stop backfill
+
+        if inserted > 0:
+            logging.info(f"Sequence {seq_number}: Backfilled {inserted} changesets.")
+            update_sequence_status(seq_number, "backfilled")
+        else:
+            logging.info(f"Sequence {seq_number}: No new changesets.")
+            update_sequence_status(seq_number, "empty")
+
+    except FileNotFoundError:
+        logging.warning(f"Sequence {seq_number}: File not found. Marked as empty.")
+        update_sequence_status(seq_number, "empty")
+    except Exception as e:
+        logging.error(f"Sequence {seq_number}: Failed with error: {e}")
+        update_sequence_status(seq_number, "failed", error_message=str(e))
+
+    return False  # Continue backfill
+
+
+def get_current_sequence() -> int:
+    """Fetch the current OSM sequence number from the replication state file."""
+    url = config.get(
+        "replication_state_url",
+        "https://planet.osm.org/replication/changesets/state.yaml",
     )
-    file_empty = new_changesets_in_file == 0
-    return file_empty, min_new_ts
-
-
-def update_metadata(current_tip: int, last_processed: int) -> None:
-    """
-    Update the metadata table with the current tip and last processed sequence numbers.
-    """
-    with metadata_lock:
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM metadata WHERE id = 1")
-                row = cur.fetchone()
-                now = datetime.datetime.now(datetime.UTC)
-                if row is None:
-                    cur.execute(
-                        "INSERT INTO metadata (id, current_tip, last_processed, timestamp) VALUES (1, %s, %s, %s)",
-                        (current_tip, last_processed, now),
-                    )
-                    logging.debug(
-                        f"[{threading.current_thread().name}] Inserted metadata: current_tip={current_tip}, last_processed={last_processed}"
-                    )
-                else:
-                    cur.execute(
-                        "UPDATE metadata SET current_tip = %s, last_processed = %s, timestamp = %s WHERE id = 1",
-                        (current_tip, last_processed, now),
-                    )
-                    logging.debug(
-                        f"[{threading.current_thread().name}] Updated metadata: current_tip={current_tip}, last_processed={last_processed}"
-                    )
-                conn.commit()
-        except Exception as e:
-            conn.rollback()
-            logging.error(
-                f"[{threading.current_thread().name}] Failed to update metadata: {e}"
-            )
-
-
-def get_stored_metadata() -> Tuple[Optional[int], Optional[int]]:
-    """
-    Return the current tip and last processed sequence numbers from metadata.
-    """
-    with metadata_lock:
-        with conn.cursor() as cur:
-            cur.execute("SELECT current_tip, last_processed FROM metadata WHERE id = 1")
-            row = cur.fetchone()
-            return row if row else (None, None)
-
-
-def wait_for_db(conn, max_retries=30, delay=1):
-    """Wait for database to become available."""
-    retries = 0
-    while retries < max_retries:
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-            return True
-        except Exception as e:
-            logging.warning(
-                f"Database connection failed (attempt {retries + 1}/{max_retries}): {e}"
-            )
-            time.sleep(delay)
-            retries += 1
-    return False
-
-
-def process_block(
-    block: List[int],
-    req_session: requests.Session,
-    batch_size: int,
-    pool_name: str = "Pool",
-) -> Tuple[bool, Optional[datetime.datetime]]:
-    """
-    Process a block (list) of sequence numbers concurrently.
-
-    Returns:
-      (all_duplicates, min_new_ts)
-
-    'all_duplicates' is True if the entire block produced no new changesets.
-
-    The 'pool_name' parameter is used to set the thread_name_prefix for the executor.
-    """
-    block_new_work = False
-    min_ts: Optional[datetime.datetime] = None
-
-    def process_single_file(s: int) -> Tuple[bool, Optional[datetime.datetime]]:
-        try:
-            throttle()
-            url = replication_file_url(s)
-            logging.info(
-                f"[{threading.current_thread().name}] Downloading sequence {s} from {url}"
-            )
-            xml_bytes = download_with_retry(
-                s, req_session, retries=3, initial_delay=2.0
-            )
-            logging.info(
-                f"[{threading.current_thread().name}] Successfully downloaded sequence {s} ({len(xml_bytes)} bytes)"
-            )
-            return process_replication_content(xml_bytes, batch_size)
-        except Exception as e:
-            logging.error(
-                f"[{threading.current_thread().name}] Failed to process sequence {s}: {e}"
-            )
-            return True, None  # Treat as empty
-
-    with ThreadPoolExecutor(
-        max_workers=len(block), thread_name_prefix=pool_name
-    ) as executor:
-        futures = {executor.submit(process_single_file, s): s for s in block}
-        for future in as_completed(futures):
-            s = futures[future]
-            try:
-                file_empty, file_min_ts = future.result()
-                if not file_empty:
-                    block_new_work = True
-                if file_min_ts is not None:
-                    if min_ts is None or file_min_ts < min_ts:
-                        min_ts = file_min_ts
-            except Exception as e:
-                logging.error(
-                    f"[{threading.current_thread().name}] Error processing sequence {s}: {e}"
-                )
-
-    all_duplicates = not block_new_work
-    return all_duplicates, min_ts
-
-
-def backfill_worker(start_seq: int) -> None:
-    """
-    Worker that backfills from the stored oldest sequence down to START_SEQUENCE.
-    """
-    stored_tip, last_processed = get_stored_metadata()
-    if stored_tip is None or last_processed is None:
-        logging.info(
-            f"[{threading.current_thread().name}] No stored metadata found, nothing to backfill."
-        )
-        return
-
-    seq = last_processed
-    block_size = int(os.getenv("BLOCK_SIZE", 10))
-    batch_size = int(os.getenv("BATCH_SIZE", 1000))
-    req_session = requests.Session()
-
-    while seq > start_seq:
-        block = list(range(seq, max(start_seq, seq - block_size) - 1, -1))
-        logging.info(
-            f"[{threading.current_thread().name}] Backfill processing block from {block[0]} down to {block[-1]}"
-        )
-        logging.debug(
-            f"[{threading.current_thread().name}] Backfill block sequences: {block}"
-        )
-        _, _ = process_block(block, req_session, batch_size, pool_name="Backfill")
-        seq = block[-1] - 1
-        update_metadata(stored_tip, seq)
-    logging.info(
-        f"[{threading.current_thread().name}] Backfill worker reached START_SEQUENCE."
-    )
-
-
-def catch_up_worker() -> None:
-    """
-    Worker that polls for the current remote sequence and processes new changesets,
-    filling gaps when necessary.
-    """
-    block_size = int(os.getenv("BLOCK_SIZE", 10))
-    batch_size = int(os.getenv("BATCH_SIZE", 1000))
-    req_session = requests.Session()
-    last_successful_update = time.time()
-    watchdog_interval = 3600  # 1 hour in seconds
-    min_sleep_time = 60  # Minimum sleep time between iterations
-
-    while True:
-        try:
-            # Watchdog check
-            if time.time() - last_successful_update > watchdog_interval:
-                logging.warning(
-                    f"[{threading.current_thread().name}] Watchdog triggered - no successful updates in {watchdog_interval} seconds. Restarting worker."
-                )
-                raise RuntimeError("Watchdog timeout")
-
-            current_remote_seq = get_current_sequence()
-            stored_tip, last_processed = get_stored_metadata()
-
-            if stored_tip is None or last_processed is None:
-                stored_tip = current_remote_seq
-                last_processed = current_remote_seq
-                update_metadata(stored_tip, last_processed)
-                last_successful_update = time.time()
-
-            logging.info(
-                f"[{threading.current_thread().name}] Current remote sequence: {current_remote_seq}, "
-                f"Stored tip: {stored_tip}, Last processed: {last_processed}"
-            )
-
-            if current_remote_seq > stored_tip:
-                seq = current_remote_seq
-                while seq > stored_tip:
-                    block = list(range(seq, max(stored_tip, seq - block_size), -1))
-                    logging.info(
-                        f"[{threading.current_thread().name}] Catch-up processing new block from {block[0]} down to {block[-1]}"
-                    )
-                    logging.debug(
-                        f"[{threading.current_thread().name}] Catch-up block sequences: {block}"
-                    )
-                    try:
-                        process_block(
-                            block, req_session, batch_size, pool_name="Catch-up"
-                        )
-                        seq = block[-1] - 1
-                        last_successful_update = time.time()
-                    except Exception as e:
-                        logging.error(
-                            f"[{threading.current_thread().name}] Error processing block {block[0]}-{block[-1]}: {e}"
-                        )
-                        # Sleep a bit before retrying
-                        time.sleep(30)
-                        break
-
-                update_metadata(current_remote_seq, seq)
-                stored_tip, last_processed = current_remote_seq, seq
-
-            # Fill gaps
-            if last_processed < stored_tip:
-                seq = stored_tip
-                while seq > last_processed:
-                    block = list(range(seq, max(last_processed, seq - block_size), -1))
-                    logging.info(
-                        f"[{threading.current_thread().name}] Gap-fill processing block from {block[0]} down to {block[-1]}"
-                    )
-                    logging.debug(
-                        f"[{threading.current_thread().name}] Gap-fill block sequences: {block}"
-                    )
-                    try:
-                        process_block(
-                            block, req_session, batch_size, pool_name="Gap-fill"
-                        )
-                        seq = block[-1] - 1
-                        last_successful_update = time.time()
-                    except Exception as e:
-                        logging.error(
-                            f"[{threading.current_thread().name}] Error processing gap block {block[0]}-{block[-1]}: {e}"
-                        )
-                        # Sleep a bit before retrying
-                        time.sleep(30)
-                        break
-
-                update_metadata(stored_tip, seq)
-
-            # Update metadata periodically even if no changes
-            update_metadata(current_remote_seq, last_processed)
-            last_successful_update = time.time()
-
-            # Calculate dynamic sleep time based on how much work was done
-            sleep_time = max(min_sleep_time, int(os.getenv("SLEEP_TIME", 300)))
-            logging.info(
-                f"[{threading.current_thread().name}] Completed a pass. Sleeping for {sleep_time} seconds..."
-            )
-            time.sleep(sleep_time)
-
-        except Exception as e:
-            logging.error(
-                f"[{threading.current_thread().name}] Unhandled exception in catch-up worker: {e}"
-            )
-            # Clean up and restart
-            try:
-                req_session.close()
-                req_session = requests.Session()
-            except Exception:
-                pass
-            # Wait before restarting
-            time.sleep(60)
+    response = requests.get(url)
+    response.raise_for_status()
+    return int(yaml.safe_load(response.text)["sequence"])
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s [%(threadName)s]: %(message)s",
+    batch_size = int(config.get("batch_size", 1000))
+    start_seq = get_current_sequence()
+    cutoff_date = get_most_recent_closed_at()
+
+    if not cutoff_date:
+        logging.error("No existing changesets found. Provide a valid cutoff date.")
+        sys.exit(1)
+
+    logging.info(
+        f"Starting backfill from sequence {start_seq} down to cutoff date {cutoff_date}"
     )
-    if not wait_for_db(conn):
-        logging.error("Failed to connect to database after multiple attempts. Exiting.")
-        return
 
-    start_seq = int(os.getenv("START_SEQUENCE", 0))
+    for seq in range(start_seq, -1, -1):
+        if process_sequence(seq, batch_size, cutoff_date):
+            logging.info("Cutoff date reached. Backfill complete.")
+            break
+        throttle()
 
-    # If no metadata is stored yet, initialize it with the current remote sequence.
-    stored_tip, last_processed = get_stored_metadata()
-    if stored_tip is None or last_processed is None:
-        current_seq = get_current_sequence()
-        update_metadata(current_seq, current_seq)
-
-    # Spawn the two worker threads with explicit names.
-    t_backfill = threading.Thread(
-        target=backfill_worker, args=(start_seq,), daemon=True, name="Backfill"
-    )
-    t_catchup = threading.Thread(target=catch_up_worker, daemon=True, name="Catch-up")
-
-    t_backfill.start()
-    t_catchup.start()
-
-    t_backfill.join()
-    t_catchup.join()
-
-    logging.info("Both workers have exited. Main exiting.")
+    logging.info("Backfill process finished.")
 
 
 if __name__ == "__main__":
