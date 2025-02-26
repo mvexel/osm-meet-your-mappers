@@ -52,7 +52,9 @@ def insert_changeset_batch(conn, cs_batch: List[dict]) -> None:
 
         if new_cs_batch:
             try:
-                logging.debug(f"Inserting batch with first changeset: {new_cs_batch[0]}")
+                logging.debug(
+                    f"Inserting batch with first changeset: {new_cs_batch[0]}"
+                )
                 upsert_changesets(conn, new_cs_batch)
                 logging.info(f"Inserted/updated {len(new_cs_batch)} changesets.")
             except Exception as e:
@@ -156,7 +158,8 @@ def process_changeset_file(config: Dict):
         thread.join()
         conn.close()
 
-    logging.info("All processing complete.")
+    logging.info("All processing complete. Exiting.")
+    sys.exit(0)
 
 
 def main():
@@ -169,8 +172,8 @@ def main():
             format="%(asctime)s %(levelname)s [%(threadName)s]: %(message)s",
             handlers=[
                 logging.StreamHandler(),
-                logging.FileHandler('archive_loader.log')
-            ]
+                # logging.FileHandler('archive_loader.log')
+            ],
         )
 
         logging.info("Starting archive loader with configuration:")

@@ -90,5 +90,6 @@ services:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
       - LOADER_CHANGESET_FILE=/archives/changesets.osm.bz2
+    restart: "no"
     profiles:
       - initialization
