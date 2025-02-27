@@ -142,19 +142,46 @@ footer a:hover {
   color: #000;
 }
 .header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
 }
 
 .user-display {
-    background: rgba(0, 0, 0, 0.05);
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    margin-top: 1rem;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  margin-top: 1rem;
 }
 
 .user-display .username {
-    font-weight: bold;
+  font-weight: bold;
+}
+
+.sortable-table th {
+  cursor: pointer;
+  position: relative;
+  padding-right: 20px;
+}
+
+.sort-indicator {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+th.sort-asc .sort-indicator::after {
+  content: "▲";
+}
+
+th.sort-desc .sort-indicator::after {
+  content: "▼";
+}
+
+.truncation-notice {
+  margin-top: 10px;
+  font-style: italic;
+  color: #666;
 }

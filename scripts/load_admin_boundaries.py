@@ -8,7 +8,6 @@ import tempfile
 from pathlib import Path
 from dotenv import load_dotenv
 import requests
-from osm_meet_your_mappers.db import get_db_connection
 
 load_dotenv()
 
@@ -16,17 +15,11 @@ logging.basicConfig(level=logging.INFO)
 
 # Use Natural Earth Adm1 by default. If you want to use something else,
 # You will need to adapt the join fields adm.admin and adm.name in the
-# user_activity_centers_mv definition (see user_activity_centers.sql)
+# user_activity_centers_mv definition
 DATA_URL = os.environ.get(
     "ADM_BOUNDARIES_DOWNLOAD_URL",
     "https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_1_states_provinces.zip",
 )
-
-
-def create_schema():
-    """Create schema if not exists."""
-    with get_db_connection() as conn, conn.cursor() as cur:
-        cur.execute("CREATE SCHEMA IF NOT EXISTS geoboundaries;")
 
 
 def download_file(url: str, local_path: Path, timeout: int = 10):
@@ -76,8 +69,10 @@ def load_shapefile(extract_path: Path):
         "GEOMETRY_NAME=geom",
         "-nlt",
         "MULTIPOLYGON",
+        "-sql",
+        "SELECT admin AS name_0, name AS name_1 FROM ne_10m_admin_1_states_provinces",
         "-nln",
-        "geoboundaries.adm1",
+        "geoboundaries.adm1_boundaries",
         "-overwrite",
         str(shp_file),
     ]
@@ -86,25 +81,8 @@ def load_shapefile(extract_path: Path):
     logging.info("Shapefile successfully loaded into the database.")
 
 
-def create_mv():
-    """
-    Create the materialized view for user activity centers.
-    """
-    with open("scripts/user_activity_centers.sql", "r") as f:
-        sql = f.read()
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(sql)
-        conn.commit()
-        cursor.close()
-        conn.close()
-    logging.info("Materialized view created successfully.")
-
-
 def main():
     try:
-        create_schema()
-
         # Use a temporary directory for download and extraction
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -117,9 +95,8 @@ def main():
             load_shapefile(extract_path)
             logging.info("Geo boundaty load complete.")
 
-        create_mv()
-        logging.info("Materialized view created successfully.")
-    except Exception as e:
+        logging.info("Boundaries loaded successfully.")
+    except Exception:
         logging.exception("An error occurred during processing.")
         sys.exit(1)
 

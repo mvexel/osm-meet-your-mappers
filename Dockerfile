@@ -29,11 +29,11 @@ CMD ["uvicorn", "osm_meet_your_mappers.api:app", "--host", "0.0.0.0", "--workers
 FROM runtime AS archive_loader
 CMD ["python", "-m", "scripts.archive_loader"]
 
-FROM runtime AS user_mv_loader
+FROM runtime AS load_admin_boundaries
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gdal-bin \
     && rm -rf /var/lib/apt/lists/*
-CMD ["python", "-m", "scripts.init_user_activity"]
+CMD ["python", "-m", "scripts.load_admin_boundaries"]
 
 FROM runtime AS backfill
 CMD ["python", "-m", "scripts.backfill"]

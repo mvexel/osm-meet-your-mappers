@@ -10,8 +10,6 @@ services:
     volumes:
       - ${PG_DATA_HOST_PATH}:/var/lib/postgresql/data
       - ./scripts/setup_db.sql:/docker-entrypoint-initdb.d/setup_db.sql
-    ports:
-      - "5432:5432"
     env_file: .env
     command: ["postgres", "-c", "app.retention_period=${RETENTION_PERIOD}"]
     healthcheck:
@@ -57,10 +55,10 @@ services:
     profiles:
       - production
 
-  user_mv_loader:
+  load_admin_boundaries:
     build:
       context: .
-      target: user_mv_loader
+      target: load_admin_boundaries
     working_dir: /app
     volumes:
       - .:/app
@@ -70,6 +68,7 @@ services:
     env_file: .env
     environment:
       - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
     profiles:
       - initialization
 
@@ -88,7 +87,7 @@ services:
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=DEBUG
       - LOADER_CHANGESET_FILE=/archives/changesets.osm.bz2
+    restart: "no"
     profiles:
       - initialization
