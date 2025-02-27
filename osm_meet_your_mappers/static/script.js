@@ -55,36 +55,48 @@ const utils = {
 
 function friendlyDate(utcInput) {
   let date;
-  if (typeof utcInput === "string") {
-    const utcString = utcInput.endsWith("Z") ? utcInput : utcInput + "Z";
-    date = new Date(utcString);
-  } else if (utcInput instanceof Date) {
-    date = utcInput;
-  } else {
-    throw new Error("Invalid date input; expected a string or Date object.");
-  }
+  try {
+    if (typeof utcInput === "string") {
+      // Ensure the string is properly formatted for Date parsing
+      date = new Date(utcInput);
 
-  const now = new Date();
-  const oneDay = 24 * 60 * 60 * 1000;
-  const optionsTime = { hour: "2-digit", minute: "2-digit" };
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        console.error("Invalid date string:", utcInput);
+        return "Invalid Date";
+      }
+    } else if (utcInput instanceof Date) {
+      date = utcInput;
+    } else {
+      console.error("Invalid date input type:", typeof utcInput);
+      return "Invalid Date";
+    }
 
-  // If the date is today (in local time)
-  if (now.toDateString() === date.toDateString()) {
-    return `Today at ${date.toLocaleTimeString(undefined, optionsTime)}`;
+    const now = new Date();
+    const oneDay = 24 * 60 * 60 * 1000;
+    const optionsTime = { hour: "2-digit", minute: "2-digit" };
+
+    // If the date is today (in local time)
+    if (now.toDateString() === date.toDateString()) {
+      return `Today at ${date.toLocaleTimeString(undefined, optionsTime)}`;
+    }
+    const yesterday = new Date(now.getTime() - oneDay);
+    if (yesterday.toDateString() === date.toDateString()) {
+      return `Yesterday at ${date.toLocaleTimeString(undefined, optionsTime)}`;
+    }
+    return (
+      date.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }) +
+      " " +
+      date.toLocaleTimeString(undefined, optionsTime)
+    );
+  } catch (error) {
+    console.error("Error formatting date:", error, "Input was:", utcInput);
+    return "Invalid Date";
   }
-  const yesterday = new Date(now.getTime() - oneDay);
-  if (yesterday.toDateString() === date.toDateString()) {
-    return `Yesterday at ${date.toLocaleTimeString(undefined, optionsTime)}`;
-  }
-  return (
-    date.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    }) +
-    " " +
-    date.toLocaleTimeString(undefined, optionsTime)
-  );
 }
 
 function updateStatus(message) {
@@ -148,10 +160,19 @@ const dataHandler = {
     columns.forEach((col) => {
       const th = document.createElement("th");
       th.textContent = col.label;
-      if (col.key === "changeset_count") {
-        th.dataset.sortMethod = "number";
-        th.dataset.sortDefault = "";
+
+      // Set appropriate data attributes for sorting
+      if (col.type === "number") {
+        th.setAttribute("data-sort-method", "number");
+      } else if (col.type === "date") {
+        th.setAttribute("data-sort-method", "date");
       }
+
+      // Only set default sort on one column
+      if (col.key === "changeset_count") {
+        th.setAttribute("data-sort-default", "");
+      }
+
       headerRow.appendChild(th);
     });
     thead.appendChild(headerRow);
@@ -173,10 +194,21 @@ const dataHandler = {
           link.rel = "noopener noreferrer";
           td.appendChild(link);
         } else if (col.type === "date") {
+          // Format the date for display
           td.textContent = friendlyDate(value);
-          td.dataset.sort = new Date(
-            value + (value.endsWith("Z") ? "" : "Z")
-          ).getTime();
+
+          // Add a data-sort attribute with timestamp for proper sorting
+          try {
+            const timestamp = new Date(value).getTime();
+            if (!isNaN(timestamp)) {
+              td.setAttribute("data-sort", timestamp);
+            }
+          } catch (e) {
+            console.error("Error setting sort value for date:", e);
+          }
+        } else if (col.type === "number") {
+          td.textContent = value;
+          td.setAttribute("data-sort", value);
         } else {
           td.textContent = value;
         }
@@ -197,6 +229,7 @@ const dataHandler = {
       elements.results.appendChild(notice);
     }
 
+    // Initialize Tablesort
     new Tablesort(table, { descending: CONFIG.DATE_SORT_DESC });
   },
 
@@ -210,14 +243,28 @@ const dataHandler = {
     ];
     const csvContent = [
       headers.join(","),
-      ...state.currentData.map((row) =>
-        [
+      ...state.currentData.map((row) => {
+        // Safely parse dates
+        let firstChange, lastChange;
+        try {
+          firstChange = new Date(row.first_change).toISOString();
+        } catch (e) {
+          firstChange = row.first_change || "";
+        }
+
+        try {
+          lastChange = new Date(row.last_change).toISOString();
+        } catch (e) {
+          lastChange = row.last_change || "";
+        }
+
+        return [
           `"${row.username}"`,
           row.changeset_count,
-          new Date(row.first_change).toISOString(),
-          new Date(row.last_change).toISOString(),
-        ].join(",")
-      ),
+          firstChange,
+          lastChange,
+        ].join(",");
+      }),
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
