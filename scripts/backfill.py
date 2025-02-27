@@ -646,7 +646,6 @@ def backfill_changesets_mt(batch_size: int, cutoff_date: datetime) -> int:
     current_seq = get_current_sequence()
     processed_seqs = get_processed_sequences()
 
-    # Initialize sequences_to_process
     sequences_to_process = []
     highest_processed = 0
     lowest_processed = 0
@@ -655,35 +654,25 @@ def backfill_changesets_mt(batch_size: int, cutoff_date: datetime) -> int:
         highest_processed = max(processed_seqs.keys())
         lowest_processed = min(processed_seqs.keys())
 
-        # Check if we're already caught up
-        if highest_processed >= current_seq:
-            logging.info("Already up to date with the current sequence.")
+        # Find missing sequences in the full range up to the latest OSM sequence
+        gaps = find_all_sequence_gaps(lowest_processed, current_seq)
 
-            # Check for gaps in processed sequences
-            gaps = find_all_sequence_gaps(lowest_processed, highest_processed)
-
-            if not gaps:
-                logging.info("No gaps detected in processed sequences.")
-                return highest_processed
-            else:
-                logging.info(
-                    f"Found {len(gaps)} gaps in processed sequences. Will fill them."
-                )
-                sequences_to_process = gaps
+        if highest_processed >= current_seq and not gaps:
+            logging.info(
+                "Already up to date with the current sequence and no gaps found."
+            )
+            return highest_processed  # No work left to do
+        elif gaps:
+            logging.info(
+                f"Found {len(gaps)} unprocessed sequences: {gaps}. Processing them..."
+            )
+            sequences_to_process.extend(gaps)
         else:
-            # We have some processed sequences but need to process more
             logging.info(
                 f"Continuing backfill from sequence {current_seq} down to {highest_processed+1}"
             )
             sequences_to_process = list(range(current_seq, highest_processed, -1))
 
-            # Also check for gaps in already processed sequences
-            gaps = find_all_sequence_gaps(lowest_processed, highest_processed)
-            if gaps:
-                logging.info(
-                    f"Found {len(gaps)} gaps in previously processed sequences. Adding to queue."
-                )
-                sequences_to_process.extend(gaps)
     else:
         # No sequences processed yet, process all from current down
         logging.info(
@@ -730,26 +719,24 @@ def backfill_changesets_mt(batch_size: int, cutoff_date: datetime) -> int:
     sequence_queue.join()
 
     # Do one final gap check before finishing
-    if highest_processed > 0 and lowest_processed > 0:
-        # Check for gaps in the entire range we've processed
-        min_seq = min(lowest_processed, min(sequences_to_process))
-        max_seq = max(highest_processed, current_seq)
+    min_seq = min(lowest_processed, min(sequences_to_process))
+    max_seq = max(highest_processed, current_seq)
 
-        final_queue = queue.Queue()
-        gaps = find_all_sequence_gaps(min_seq, max_seq)
+    final_queue = queue.Queue()
+    gaps = find_all_sequence_gaps(min_seq, max_seq)
 
-        if gaps:
-            logging.info(f"Final check found {len(gaps)} gaps. Processing them...")
+    if gaps:
+        logging.info(f"Final check found {len(gaps)} gaps. Processing them...")
 
-            # Add gaps to queue
-            for seq in gaps:
-                final_queue.put(seq)
+        # Add gaps to queue
+        for seq in gaps:
+            final_queue.put(seq)
 
-            # Process any remaining gaps
-            while not final_queue.empty():
-                seq = final_queue.get()
-                process_sequence(seq, batch_size, cutoff_date)
-                final_queue.task_done()
+        # Process any remaining gaps
+        while not final_queue.empty():
+            seq = final_queue.get()
+            process_sequence(seq, batch_size, cutoff_date)
+            final_queue.task_done()
 
     # Wait for all workers to finish
     for worker in workers:
@@ -763,7 +750,6 @@ def backfill_changesets_mt(batch_size: int, cutoff_date: datetime) -> int:
         f"performed {stats['retries']} retries."
     )
 
-    # Return the current sequence as the highest processed
     return get_current_sequence()
 
 
