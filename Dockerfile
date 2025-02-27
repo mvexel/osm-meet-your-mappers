@@ -27,6 +27,7 @@ EXPOSE 8000
 CMD ["uvicorn", "osm_meet_your_mappers.api:app", "--host", "0.0.0.0", "--workers", "4", "--proxy-headers", "--forwarded-allow-ips", "*"]
 
 FROM runtime AS archive_loader
+RUN pip install -e .
 CMD ["python", "-m", "scripts.archive_loader"]
 
 FROM runtime AS load_admin_boundaries
