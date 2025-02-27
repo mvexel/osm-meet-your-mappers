@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2025-02-27
+
+### Added
+- **Threaded Backfill:**  
+  Introduced multi-threaded backfill scripts with improved error handling, retry logic (including exponential backoff), and a database connection pool for more robust concurrency.
+- **CSV Export Function:**  
+  A dedicated `exportToCsv()` function is now used with a single click listener, preventing multiple export dialogs from being triggered inadvertently.
+
+### Changed
+- **Table Sorting Logic:**  
+  Removed external TableSort dependency in favor of a custom DOM-based sorting mechanism, which streamlines dependencies and simplifies maintenance.
+- **Enhanced Network Resilience:**  
+  Updated the replication file download logic to handle SSL/connection errors with specific retries and exponential backoff.
+- **API & JS Refactoring:**  
+  Aligned front-end JavaScript with API changes due to the new `tags`, `comments` (JSON), and `bbox` columns. Improved date parsing and display in `script.js`.
+- **Docker & DB Configuration:**
+  - Removed the external port mapping for PostgreSQL (`5432` no longer exposed on the host).
+  - Expanded environment variables and Docker Compose settings for advanced Postgres usage and improved backfill scripts.
+
+### Fixed
+- **Duplicate CSV Exports:**  
+  Addressed an issue where multiple CSV export event listeners were attached, causing duplicate export dialogs.
+- **Date Parsing:**  
+  Enhanced error handling around invalid date strings when parsing changeset data, reducing runtime exceptions.
+- **Connection Stability:**  
+  Created new sessions to avoid SSL and connection reuse issues, stabilizing concurrent downloads and database writes.
+
+### Removed
+- **TableSort Scripts & Styles:**  
+  Deleted `tablesort.js`, `tablesort.css`, and associated references, replaced with a custom sorting solution.
+
+### Dependency Updates
+- **asyncpg** upgraded from `0.29.0` to `0.30.0`.
+- **psycopg2-binary** upgraded from `2.9.9` to `2.9.10`.
+- Minor upgrades merged via Dependabot for `aiofiles`, `black`, `pytest-cov`, and other packages.
+
+[1.0.7]: https://github.com/your-repo/compare/v1.0.6...v1.0.7
+
  ## [1.0.6] - 2025-02-24
 
  ### Added
