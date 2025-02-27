@@ -1,75 +1,92 @@
 # Meet Your Mappers
 
-A web site that lets mappers find their local mapping friends.
+A web site and API that lets mappers find their local mapping friends.
 
-## Configure
+---
 
-There are a couple places you can configure stuff...
+## 1. Prerequisites
 
-- `.env.example` -- copy this to .env before running anything. There's comments that explain stuff. At the very least you should change the following:
-   - `PG_DATA_HOST_PATH` -- make sure you have at least 100GB available here.
-   - `LOADER_CHANGESET_FILE`
-   - `OSM_CLIENT_ID`
-   - `OSM_CLIENT_SECRET`
-- `script.js` -- there is a `Config` object at the top, with comments to explain
+1. **Clone or download this repository.**  
+2. **Copy `.env.example` to `.env`.**  
+   - Update the values in `.env`:
+     - `PG_DATA_HOST_PATH` must point to a directory with **at least 100GB** of free space (for Postgres data).
+     - `LOADER_CHANGESET_FILE` must point to the downloaded changesets archive (`.osm.bz2`).
+     - `OSM_CLIENT_ID` and `OSM_CLIENT_SECRET` must be replaced with your OSM OAuth credentials.
 
-## Initial Setup
+3. **Optionally**, edit the `Config` object in `script.js` if you need different client-side settings.
 
-- Download a changesets archive from [planet.osm.org](https://planet.osm.org)
-- Set the path to the archive file in `.env` (LOADER_CHANGESET_FILE)
-- run the initialization containers *WARNING* running this command will truncate the changeset tables
+---
 
-```bash
+## 2. Download Changesets Archive
+
+1. **Obtain the changeset archive** (e.g., from [https://planet.osm.org](https://planet.osm.org))—the `.osm.bz2` file.
+2. **Set** the path to this file as `LOADER_CHANGESET_FILE` in your `.env`.
+
+---
+
+## 3. Initial Database Setup
+
+1. **Spin up the initialization services:**
+
+   ```bash
    docker compose --profile initialization up -d
-```
+   ```
+   
+2. This performs the following:
+   1. Creates the database (and schema).
+   2. Loads changeset metadata from your archive up to `RETENTION_DAYS` in the past.
+   3. Downloads & loads administrative boundaries (default is Natural Earth, see `ADM_BOUNDARIES_DOWNLOAD_URL` in `.env`).
+   4. Creates a materialized view for user activity centers (not currently used in the app).
 
-This will perform two actions:
-1. Create the database and the schema
-2. Load changeset metadata from the archive file up to `RETENTION_PERIOD` in the past.
-3. Load Administrative Boundaries file for admin level 1 (state / province). This is used in the materialized view, see next step. Default is Natural Earth, see `ADM_BOUNDARIES_DOWNLOAD_URL` in `.env`
-4. Create a materialized view for user activity centers (not currently used in the app)
+> **Warning:** This process truncates the changeset tables—be sure you’re okay with dropping and reloading existing data.
 
-## Regular Operation
+---
 
-After the initial setup, you'll need to run these services every time:
+## 4. Regular Operation
 
-Start the database, backfill, and API:
+1. **Start the main services** (database, backfill, and API) with:
    ```bash
    docker compose --profile production up -d
    ```
 
-This will start three services:
-1. The API itself, on port 8080
-2. The backfill / catch up service, keeping the database up to date using minutely replication files from OSM
-3. The PoistGIS database.
+2. This runs:
+   - **`db`**: A PostGIS database (using a multi-arch PostGIS Dockerfile).  
+   - **`backfill`**: Keeps the database up-to-date with minutely replication files from OSM.  
+   - **`api`**: Exposes the FastAPI application and static site on port `8000`.  
 
+3. If you want the site publicly accessible, put a reverse proxy (e.g., Caddy, nginx) in front of `0.0.0.0:8000`.
 
-This runs:
-- `db` -- PostGIS built from [the multiarch fork](https://github.com/baosystems/docker-postgis) of the official PostGIS image. You can swap out for the [official image](https://github.com/postgis/docker-postgis/actions) if it works for you, but I did not test with that.
-- `backfill` -- The backfill script that takes care of populating the database. How far back it goes can be set in `.env` (see above). If you intend to go a long time back, try using the archive loader (but there's no image for that right now). The script backfills by fetching minutely changeset replication files from OSM. It also keeps an eye out for new files published every minute.
--  `api`: this exposes the FastAPI application as well as the static web site on port 8000.
+---
 
-If you want to run this on a public server, you will need to set up Caddy or nginx or similar to put a reverse proxy in front.
+## 5. Upgrading
 
-## Upgrade
+When there’s a new release or you’ve pulled changes from Git:
 
-If you want to upgrade the application:
-
-1. Pull the latest from Github:
+1. **Pull latest code from Git**:
    ```bash
    git pull
    ```
-
-2. Update dependencies:
+2. **Update dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
-
-3. Rebuild the docker images:
+3. **Rebuild the Docker images**:
    ```bash
    docker compose down -v
    docker compose build --no-cache
    docker compose up -d
    ```
+4. **Check** `CHANGELOG.md` for version-specific upgrade notes.
 
-4. Check the [CHANGELOG.md](CHANGELOG.md) for any additional upgrade instructions specific to each version.
+---
+
+## 6. Summary of Key Environment Variables
+
+Below are some critical settings you might need to tweak in `.env`:
+
+- **`PG_DATA_HOST_PATH`**: Host directory mapped for Postgres data; must have ample disk space.  
+- **`LOADER_CHANGESET_FILE`**: Path to the `.osm.bz2` changeset archive file.  
+- **`OSM_CLIENT_ID` / `OSM_CLIENT_SECRET`**: OSM OAuth credentials.  
+- **`RETENTION_DAYS`**: How many days in the past to load from changesets.  
+- **`START_SEQUENCE`**: Which replication sequence to start from (for historical backfill).  
+- **`MIN_CHANGESETS`**, **`MAX_BBOX_FOR_LOCAL`**, etc.: Adjusts how user activity is filtered.  
