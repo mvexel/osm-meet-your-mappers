@@ -117,16 +117,63 @@ def replication_file_url(seq_number: int) -> str:
     return f"{base_url}/{dir1}/{dir2}/{file_part}.osm.gz"
 
 
-def download_and_decompress(url: str) -> bytes:
-    logging.debug(f"Downloading {url}")
-    response = requests.get(url, allow_redirects=True)
+def download_and_decompress(
+    url: str, retry_count: int = 0, max_retries: int = 3
+) -> bytes:
+    """
+    Download and decompress a replication file with improved error handling.
+    Implements specific retry logic for download issues.
+    """
+    logging.debug(f"Downloading {url} (attempt {retry_count + 1}/{max_retries + 1})")
 
-    if response.status_code == 404:
-        logging.warning(f"Replication file not found at {url}. Skipping.")
-        raise FileNotFoundError
+    try:
+        # Create a new session for each download to avoid SSL connection reuse issues
+        session = requests.Session()
 
-    response.raise_for_status()
-    return gzip.decompress(response.content)
+        # Set a reasonable timeout
+        response = session.get(url, allow_redirects=True, timeout=(10, 30))
+
+        if response.status_code == 404:
+            logging.warning(f"Replication file not found at {url}. Skipping.")
+            raise FileNotFoundError
+
+        response.raise_for_status()
+        return gzip.decompress(response.content)
+
+    except (requests.exceptions.SSLError, requests.exceptions.ConnectionError) as e:
+        # Handle SSL and connection errors specifically
+        if retry_count < max_retries:
+            # Exponential backoff
+            wait_time = 2**retry_count
+            logging.warning(
+                f"SSL/Connection error downloading {url}: {e}. Retrying in {wait_time}s..."
+            )
+            time.sleep(wait_time)
+            return download_and_decompress(url, retry_count + 1, max_retries)
+        else:
+            logging.error(
+                f"Failed to download {url} after {max_retries + 1} attempts: {e}"
+            )
+            raise
+
+    except requests.exceptions.RequestException as e:
+        # Handle other request exceptions
+        if retry_count < max_retries:
+            wait_time = 2**retry_count
+            logging.warning(
+                f"Error downloading {url}: {e}. Retrying in {wait_time}s..."
+            )
+            time.sleep(wait_time)
+            return download_and_decompress(url, retry_count + 1, max_retries)
+        else:
+            logging.error(
+                f"Failed to download {url} after {max_retries + 1} attempts: {e}"
+            )
+            raise
+    finally:
+        # Ensure the session is closed
+        if "session" in locals():
+            session.close()
 
 
 def update_sequence_status(
@@ -299,11 +346,13 @@ def process_sequence(
 
         # Add to retry queue if retries left
         if retry_count < MAX_RETRIES:
-            retry_time = datetime.now() + timedelta(seconds=RETRY_INTERVAL)
+            # Use exponential backoff for retry timing
+            backoff_seconds = min(RETRY_INTERVAL * (2**retry_count), 3600)  # Max 1 hour
+            retry_time = datetime.now() + timedelta(seconds=backoff_seconds)
             with sequence_lock:
                 failed_sequences.put((retry_time, retry_count + 1, seq_number))
             logging.info(
-                f"Sequence {seq_number} scheduled for retry ({retry_count + 1}/{MAX_RETRIES})"
+                f"Sequence {seq_number} scheduled for retry in {backoff_seconds}s ({retry_count + 1}/{MAX_RETRIES})"
             )
         else:
             logging.error(f"Sequence {seq_number} failed after {MAX_RETRIES} retries")
