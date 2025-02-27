@@ -37,5 +37,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 CMD ["python", "-m", "scripts.load_admin_boundaries"]
 
 FROM runtime AS backfill
+RUN pip install -e .
 CMD ["python", "-m", "scripts.backfill"]
 
