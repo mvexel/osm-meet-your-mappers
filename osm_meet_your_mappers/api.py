@@ -208,40 +208,41 @@ SELECT
     closed_at, 
     username, 
     uid, 
-    min_lon, 
-    min_lat, 
-    max_lon, 
-    max_lat, 
+    ST_XMin(bbox) as min_lon,
+    ST_YMin(bbox) as min_lat,
+    ST_XMax(bbox) as max_lon,
+    ST_YMax(bbox) as max_lat,
     open
 FROM 
     changesets
-WHERE     
-    ST_Intersects(
-        ST_MakeEnvelope(%s, %s, %s, %s, 4326), 
-        bbox
-    )
-AND (%s IS NULL OR username = %s)
+WHERE 
+    (%s IS NULL OR username = %s)
 AND (%s IS NULL OR created_at >= %s)
 AND (%s IS NULL OR created_at <= %s)
-LIMIT %s OFFSET %s;
 """
-            cur.execute(
-                query,
-                (
-                    min_lon,
-                    min_lat,
-                    max_lon,
-                    max_lat,
-                    username,
-                    username,
-                    created_after,
-                    created_after,
-                    created_before,
-                    created_before,
-                    limit,
-                    offset,
-                ),
-            )
+            params = [
+                username,
+                username,
+                created_after,
+                created_after,
+                created_before,
+                created_before,
+            ]
+
+            # Only add bbox filter if coordinates are provided
+            if all(coord is not None for coord in [min_lon, min_lat, max_lon, max_lat]):
+                query += """
+AND ST_Intersects(
+    ST_MakeEnvelope(%s, %s, %s, %s, 4326), 
+    bbox
+)
+"""
+                params.extend([min_lon, min_lat, max_lon, max_lat])
+
+            query += "LIMIT %s OFFSET %s;"
+            params.extend([limit, offset])
+
+            cur.execute(query, params)
             results = cur.fetchall()
             return [
                 ChangesetResponse(
@@ -292,11 +293,11 @@ SELECT
     MAX(created_at) AS last_change
 FROM changesets
 WHERE
-    max_lon - min_lon < %s AND max_lat - min_lat < %s
+    (ST_XMax(bbox) - ST_XMin(bbox)) < %s AND (ST_YMax(bbox) - ST_YMin(bbox)) < %s
 AND ST_Intersects(
-        ST_MakeEnvelope(%s, %s, %s, %s, 4326), 
-        bbox
-    )
+    ST_MakeEnvelope(%s, %s, %s, %s, 4326), 
+    bbox
+)
 GROUP BY username
 HAVING COUNT(id) >= %s
 ORDER BY changeset_count DESC
@@ -318,8 +319,8 @@ ORDER BY changeset_count DESC
                 {
                     "username": row[0],
                     "changeset_count": row[1],
-                    "first_change": row[2].isoformat(),
-                    "last_change": row[3].isoformat(),
+                    "first_change": row[2].isoformat() if row[2] else None,
+                    "last_change": row[3].isoformat() if row[3] else None,
                 }
                 for row in results
             ]
