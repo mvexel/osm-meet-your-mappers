@@ -143,7 +143,12 @@ const dataHandler = {
   displayMappers(data) {
     state.currentData = data;
     elements.export.container.style.display = data.length ? "block" : "none";
+    elements.export.button.addEventListener("click", function (e) {
+      e.preventDefault();
+      dataHandler.exportToCsv();
+    });
 
+    // Define columns
     const columns = [
       { key: "username", label: "User", type: "string" },
       { key: "changeset_count", label: "Changeset Count", type: "number" },
@@ -151,27 +156,29 @@ const dataHandler = {
       { key: "last_change", label: "Last Change", type: "date" },
     ];
 
+    // Create table structure
     const table = document.createElement("table");
+    table.className = "sortable-table";
     const thead = document.createElement("thead");
     const tbody = document.createElement("tbody");
 
-    // Create table header
+    // Create header row
     const headerRow = document.createElement("tr");
-    columns.forEach((col) => {
+    columns.forEach((col, index) => {
       const th = document.createElement("th");
       th.textContent = col.label;
+      th.dataset.type = col.type;
+      th.dataset.key = col.key;
 
-      // Set appropriate data attributes for sorting
-      if (col.type === "number") {
-        th.setAttribute("data-sort-method", "number");
-      } else if (col.type === "date") {
-        th.setAttribute("data-sort-method", "date");
-      }
+      // Add sort direction indicator
+      const indicator = document.createElement("span");
+      indicator.className = "sort-indicator";
+      th.appendChild(indicator);
 
-      // Only set default sort on one column
-      if (col.key === "changeset_count") {
-        th.setAttribute("data-sort-default", "");
-      }
+      // Add click event for sorting
+      th.addEventListener("click", () =>
+        this.sortTable(table, index, col.type)
+      );
 
       headerRow.appendChild(th);
     });
@@ -181,12 +188,12 @@ const dataHandler = {
     const maxRows = CONFIG.MAX_TABLE_ROWS;
     data.slice(0, maxRows).forEach((item) => {
       const row = document.createElement("tr");
+
       columns.forEach((col) => {
         const td = document.createElement("td");
         const value = item[col.key];
 
         if (col.key === "username") {
-          // Create a link to the OSM user page
           const link = document.createElement("a");
           link.href = `https://www.openstreetmap.org/user/${value}`;
           link.textContent = value;
@@ -194,57 +201,109 @@ const dataHandler = {
           link.rel = "noopener noreferrer";
           td.appendChild(link);
         } else if (col.type === "date") {
-          // Format the date for display
           td.textContent = friendlyDate(value);
 
-          // Add a data-sort attribute with timestamp for proper sorting
+          // Store raw date for sorting
           try {
             const timestamp = new Date(value).getTime();
-            if (!isNaN(timestamp)) {
-              td.setAttribute("data-sort", timestamp);
-            }
+            td.dataset.sortValue = timestamp;
           } catch (e) {
             console.error("Error setting sort value for date:", e);
+            td.dataset.sortValue = 0;
           }
         } else if (col.type === "number") {
           td.textContent = value;
-          td.setAttribute("data-sort", value);
+          td.dataset.sortValue = value;
         } else {
           td.textContent = value;
         }
+
         row.appendChild(td);
       });
+
       tbody.appendChild(row);
     });
 
+    // Assemble table
     table.appendChild(thead);
     table.appendChild(tbody);
 
+    // Clear previous results and add new table
     elements.results.innerHTML = "";
     elements.results.appendChild(table);
 
+    // Add notice if data was truncated
     if (data.length > maxRows) {
       const notice = document.createElement("div");
+      notice.className = "truncation-notice";
       notice.textContent = `Showing only the first ${maxRows} of ${data.length} rows. Download the CSV file to see all mappers!`;
       elements.results.appendChild(notice);
     }
 
-    // Initialize Tablesort
-    new Tablesort(table, { descending: CONFIG.DATE_SORT_DESC });
+    // Initial sort by changeset count (descending)
+    this.sortTable(table, 1, "number", true);
+  },
+
+  sortTable(table, columnIndex, dataType, forceDescending = false) {
+    const tbody = table.querySelector("tbody");
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    const headers = table.querySelectorAll("th");
+    const header = headers[columnIndex];
+
+    // Determine sort direction
+    let isDescending = header.classList.contains("sort-asc") || forceDescending;
+
+    // Reset all headers
+    headers.forEach((h) => {
+      h.classList.remove("sort-asc", "sort-desc");
+    });
+
+    // Set new sort direction
+    header.classList.add(isDescending ? "sort-desc" : "sort-asc");
+
+    // Sort the rows
+    rows.sort((rowA, rowB) => {
+      const cellA = rowA.querySelectorAll("td")[columnIndex];
+      const cellB = rowB.querySelectorAll("td")[columnIndex];
+
+      let valueA, valueB;
+
+      // Get appropriate values based on data type
+      if (dataType === "number") {
+        valueA = parseFloat(cellA.dataset.sortValue || cellA.textContent);
+        valueB = parseFloat(cellB.dataset.sortValue || cellB.textContent);
+      } else if (dataType === "date") {
+        valueA = parseInt(cellA.dataset.sortValue) || 0;
+        valueB = parseInt(cellB.dataset.sortValue) || 0;
+      } else {
+        valueA = cellA.textContent.toLowerCase();
+        valueB = cellB.textContent.toLowerCase();
+      }
+
+      // Compare values
+      if (valueA < valueB) return isDescending ? 1 : -1;
+      if (valueA > valueB) return isDescending ? -1 : 1;
+      return 0;
+    });
+
+    // Reorder the rows
+    rows.forEach((row) => tbody.appendChild(row));
   },
 
   exportToCsv() {
     if (!state.currentData) return;
+
     const headers = [
       "username",
       "changeset_count",
       "first_change",
       "last_change",
     ];
+
     const csvContent = [
       headers.join(","),
       ...state.currentData.map((row) => {
-        // Safely parse dates
+        // Format dates for CSV
         let firstChange, lastChange;
         try {
           firstChange = new Date(row.first_change).toISOString();
@@ -267,6 +326,7 @@ const dataHandler = {
       }),
     ].join("\n");
 
+    // Create and trigger download
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
 
@@ -480,7 +540,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   initializeMap();
   initializeSidebarButtons();
   elements.meetMappersBtn.addEventListener("click", handleMeetMappers);
-  elements.export.button.addEventListener("click", dataHandler.exportToCsv);
   updateStatus(
     state.osm
       ? "Welcome back! Draw an area to see its mappers."
