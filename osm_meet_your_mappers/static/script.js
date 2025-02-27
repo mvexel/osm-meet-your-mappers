@@ -140,27 +140,11 @@ const dataHandler = {
     return response.json();
   },
 
-  _boundExportToCsv: null,
-
   displayMappers(data) {
     state.currentData = data;
     elements.export.container.style.display = data.length ? "block" : "none";
 
-    // Remove previous listener if it exists
-    // I find this solution a bit hacky but I could not come up with a
-    // better one and this is what Claude came up with :shrug:
-    if (this._boundExportToCsv) {
-      elements.export.button.removeEventListener(
-        "click",
-        this._boundExportToCsv
-      );
-    }
-
-    // Create a new bound function and store it for future removal
-    this._boundExportToCsv = this.exportToCsv.bind(this);
-    elements.export.button.addEventListener("click", this._boundExportToCsv);
-
-    // Define columns
+    // Define columns and create table structure (same as before)
     const columns = [
       { key: "username", label: "User", type: "string" },
       { key: "changeset_count", label: "Changeset Count", type: "number" },
@@ -168,13 +152,11 @@ const dataHandler = {
       { key: "last_change", label: "Last Change", type: "date" },
     ];
 
-    // Create table structure
     const table = document.createElement("table");
     table.className = "sortable-table";
     const thead = document.createElement("thead");
     const tbody = document.createElement("tbody");
 
-    // Create header row
     const headerRow = document.createElement("tr");
     columns.forEach((col, index) => {
       const th = document.createElement("th");
@@ -196,7 +178,6 @@ const dataHandler = {
     });
     thead.appendChild(headerRow);
 
-    // Create table body
     const maxRows = CONFIG.MAX_TABLE_ROWS;
     data.slice(0, maxRows).forEach((item) => {
       const row = document.createElement("tr");
@@ -214,8 +195,6 @@ const dataHandler = {
           td.appendChild(link);
         } else if (col.type === "date") {
           td.textContent = friendlyDate(value);
-
-          // Store raw date for sorting
           try {
             const timestamp = new Date(value).getTime();
             td.dataset.sortValue = timestamp;
@@ -232,19 +211,15 @@ const dataHandler = {
 
         row.appendChild(td);
       });
-
       tbody.appendChild(row);
     });
 
-    // Assemble table
     table.appendChild(thead);
     table.appendChild(tbody);
 
-    // Clear previous results and add new table
     elements.results.innerHTML = "";
     elements.results.appendChild(table);
 
-    // Add notice if data was truncated
     if (data.length > maxRows) {
       const notice = document.createElement("div");
       notice.className = "truncation-notice";
@@ -253,7 +228,52 @@ const dataHandler = {
     }
 
     // Initial sort by changeset count (descending)
-    this.sortTable(table, 1, "number", true);
+    this.sortTable(table, 1, "number", CONFIG.DATE_SORT_DESC);
+  },
+
+  exportToCsv() {
+    if (!state.currentData || state.currentData.length === 0) {
+      updateStatus("No data available for CSV export.");
+      return;
+    }
+
+    const headers = [
+      "username",
+      "changeset_count",
+      "first_change",
+      "last_change",
+    ];
+
+    const csvContent = [
+      headers.join(","),
+      ...state.currentData.map((row) => {
+        // Format dates for CSV
+        const firstChange = row.first_change
+          ? new Date(row.first_change).toISOString()
+          : "";
+        const lastChange = row.last_change
+          ? new Date(row.last_change).toISOString()
+          : "";
+        return [
+          `"${row.username}"`,
+          row.changeset_count,
+          firstChange,
+          lastChange,
+        ].join(",");
+      }),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "osm_mappers_export.csv";
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   },
 
   sortTable(table, columnIndex, dataType, forceDescending = false) {
@@ -399,7 +419,7 @@ function initializeMap() {
   });
 
   // Listen
-  map.on(L.Draw.Event.CREATED, function (event) {
+  map.on(L.Draw.Event.CREATED, (event) => {
     const layer = event.layer;
     // Clear any old boxes
     drawnItems.clearLayers();
@@ -411,7 +431,7 @@ function initializeMap() {
     const ne = bounds.getNorthEast().wrap();
     if (
       Math.abs(ne.lng - sw.lng) > CONFIG.MAX_BOX_DEGREES ||
-      Math.abs(ne.lat - sw.wrap().lat) > CONFIG.MAX_BOX_DEGREES
+      Math.abs(ne.lat - sw.lat) > CONFIG.MAX_BOX_DEGREES
     ) {
       state.currentBbox = null;
       drawnItems.clearLayers();
@@ -521,7 +541,7 @@ function updateAuthUI() {
 // ================================
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // Check auth status
+  // Check auth status, update UI, etc.
   await checkAuth();
   updateAuthUI();
 
@@ -549,9 +569,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Set version in footer
   const versionElement = document.getElementById("app-version");
   versionElement.textContent = await getAppVersion();
+
   initializeMap();
   initializeSidebarButtons();
   elements.meetMappersBtn.addEventListener("click", handleMeetMappers);
+
+  // Attach the CSV export listener once
+  elements.export.button.addEventListener("click", () =>
+    dataHandler.exportToCsv()
+  );
+
   updateStatus(
     state.osm
       ? "Welcome back! Draw an area to see its mappers."
