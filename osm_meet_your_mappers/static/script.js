@@ -140,13 +140,25 @@ const dataHandler = {
     return response.json();
   },
 
+  _boundExportToCsv: null,
+
   displayMappers(data) {
     state.currentData = data;
     elements.export.container.style.display = data.length ? "block" : "none";
-    elements.export.button.addEventListener("click", function (e) {
-      e.preventDefault();
-      dataHandler.exportToCsv();
-    });
+
+    // Remove previous listener if it exists
+    // I find this solution a bit hacky but I could not come up with a
+    // better one and this is what Claude came up with :shrug:
+    if (this._boundExportToCsv) {
+      elements.export.button.removeEventListener(
+        "click",
+        this._boundExportToCsv
+      );
+    }
+
+    // Create a new bound function and store it for future removal
+    this._boundExportToCsv = this.exportToCsv.bind(this);
+    elements.export.button.addEventListener("click", this._boundExportToCsv);
 
     // Define columns
     const columns = [
