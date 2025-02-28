@@ -70,6 +70,23 @@ async def get_version():
     return {"version": version}
 
 
+@app.get("/latest")
+async def get_latest():
+    """
+    Get the timestamp for the latest changeset in the database
+    """
+    conn = get_db_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT MAX(closed_at) FROM changesets")
+            result = cur.fetchone()
+            latest_timestamp = result[0].isoformat() if result[0] else None
+            return {"latest_timestamp": latest_timestamp}
+    finally:
+        conn.close()
+
+
 @app.get("/")
 async def root():
     """

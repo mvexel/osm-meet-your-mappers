@@ -501,6 +501,17 @@ async function getAppVersion() {
   }
 }
 
+async function getLatestChangesetTimestamp() {
+  try {
+    const response = await fetch("/latest");
+    if (!response.ok) throw new Error("Failed to fetch latest changeset");
+    const data = await response.json();
+    return friendlyDate(data.latest_timestamp);
+  } catch (error) {
+    console.error("Error fetching latest changeset date :", error);
+  }
+}
+
 // ================================
 // Auth Functions
 // ================================
@@ -569,6 +580,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Set version in footer
   const versionElement = document.getElementById("app-version");
   versionElement.textContent = await getAppVersion();
+  const latestElement = document.getElementById("latest");
+  latestElement.textContent = await getLatestChangesetTimestamp();
 
   initializeMap();
   initializeSidebarButtons();
