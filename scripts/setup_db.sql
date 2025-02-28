@@ -32,17 +32,10 @@ CREATE TABLE IF NOT EXISTS metadata (
     timestamp TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS sequences (
-    id SERIAL PRIMARY KEY,
-    sequence_number INTEGER NOT NULL UNIQUE,
-    ingested_at TIMESTAMP DEFAULT NOW(),
-    status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'processing', 'success', 'failed', 'backfilled', 'empty')),
-    error_message TEXT
+CREATE TABLE IF NOT EXISTS replication_state (
+  id integer PRIMARY KEY,
+  last_seq bigint NOT NULL
 );
-
-CREATE INDEX idx_sequences_sequence_number ON sequences(sequence_number);
-CREATE INDEX idx_sequences_status ON sequences(status);
-CREATE INDEX idx_sequences_ingested_at ON sequences(ingested_at);
 
 SELECT cron.schedule(
     'cleanup-old-changesets',

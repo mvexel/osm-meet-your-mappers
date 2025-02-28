@@ -11,7 +11,7 @@ services:
       - ${PG_DATA_HOST_PATH}:/var/lib/postgresql/data
       - ./scripts/setup_db.sql:/docker-entrypoint-initdb.d/setup_db.sql
     env_file: .env
-    command: ["postgres", "-c", "app.retention_period=${RETENTION_PERIOD}"]
+    command: ["postgres", "-c", "app.retention_period=${RETENTION_DAYS} days"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
