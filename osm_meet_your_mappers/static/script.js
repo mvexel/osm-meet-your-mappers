@@ -144,7 +144,26 @@ const dataHandler = {
     state.currentData = data;
     elements.export.container.style.display = data.length ? "block" : "none";
 
-    // Define columns and create table structure (same as before)
+    // Create filter input
+    const filterContainer = document.createElement("div");
+    filterContainer.className = "filter-container";
+    const filterInput = document.createElement("input");
+    filterInput.type = "text";
+    filterInput.placeholder = "Filter by username...";
+    filterInput.className = "user-filter";
+    filterInput.addEventListener("input", (e) => {
+      const searchTerm = e.target.value.toLowerCase();
+      const rows = tbody.querySelectorAll("tr");
+      rows.forEach((row) => {
+        const username = row.querySelector("td").textContent.toLowerCase();
+        row.style.display = username.includes(searchTerm) ? "" : "none";
+      });
+    });
+    filterContainer.appendChild(filterInput);
+    elements.results.innerHTML = "";
+    elements.results.appendChild(filterContainer);
+
+    // Define columns and create table structure
     const columns = [
       { key: "username", label: "User", type: "string" },
       { key: "changeset_count", label: "Changeset Count", type: "number" },
@@ -187,12 +206,47 @@ const dataHandler = {
         const value = item[col.key];
 
         if (col.key === "username") {
-          const link = document.createElement("a");
-          link.href = `https://www.openstreetmap.org/user/${value}`;
-          link.textContent = value;
-          link.target = "_blank";
-          link.rel = "noopener noreferrer";
-          td.appendChild(link);
+          // Create container for links
+          const linkContainer = document.createElement("div");
+          linkContainer.className = "user-links";
+
+          // OSM profile link
+          const osmLink = document.createElement("a");
+          osmLink.href = `https://www.openstreetmap.org/user/${value}`;
+          osmLink.textContent = value;
+          osmLink.target = "_blank";
+          osmLink.rel = "noopener noreferrer";
+          osmLink.className = "osm-link";
+          linkContainer.appendChild(osmLink);
+
+          // OSM Messaging link
+          const messagingLink = document.createElement("a");
+          messagingLink.href = `https://www.openstreetmap.org/messages/new/${value}`;
+          messagingLink.innerHTML = `<span title="Send a message to ${value} on OSM">✉️</span>`;
+          messagingLink.target = "_blank";
+          messagingLink.rel = "noopener noreferrer";
+          messagingLink.className = "user-link";
+          linkContainer.appendChild(messagingLink);
+
+          // OSMCha link
+          if (state.currentBbox) {
+            const osmchaLink = document.createElement("a");
+            const bbox = `${state.currentBbox.minLon},${state.currentBbox.minLat},${state.currentBbox.maxLon},${state.currentBbox.maxLat}`;
+
+            // Calculate date 1 year ago for the filter
+            const oneYearAgo = new Date();
+            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+            const dateString = oneYearAgo.toISOString().split("T")[0]; // Format as YYYY-MM-DD
+
+            osmchaLink.href = `https://osmcha.org/?filters=%7B%22users%22%3A%5B%7B%22label%22%3A%22${value}%22%2C%22value%22%3A%22${value}%22%7D%5D%2C%22in_bbox%22%3A%5B%7B%22label%22%3A%22${bbox}%22%2C%22value%22%3A%22${bbox}%22%7D%5D%2C%22date__gte%22%3A%5B%7B%22label%22%3A%22${dateString}%22%2C%22value%22%3A%22${dateString}%22%7D%5D%7D`;
+            osmchaLink.innerHTML = `<span title="View ${value}'s last year of edits for this area in OSMCha">OSMCha</span>`;
+            osmchaLink.target = "_blank";
+            osmchaLink.rel = "noopener noreferrer";
+            osmchaLink.className = "user-link";
+            linkContainer.appendChild(osmchaLink);
+          }
+
+          td.appendChild(linkContainer);
         } else if (col.type === "date") {
           td.textContent = friendlyDate(value);
           try {

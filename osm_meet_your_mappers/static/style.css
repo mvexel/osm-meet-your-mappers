@@ -185,3 +185,39 @@ th.sort-desc .sort-indicator::after {
   font-style: italic;
   color: #666;
 }
+
+.user-filter {
+  margin: 1rem 0;
+  width: 100%;
+  max-width: 300px;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.user-filter:focus {
+  outline: none;
+  border-color: #00796b;
+  box-shadow: 0 0 0 2px rgba(0, 121, 107, 0.2);
+}
+
+/* User links styling */
+.user-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.5em;
+  color: #0078a8;
+  text-decoration: none;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+  position: relative;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background-color: rgba(0, 120, 168, 0.1);
+}
