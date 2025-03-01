@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2025-03-01
+
+### Added
+- Username filter functionality to search for specific mappers
+- Accessibility features including:
+  - Skip to content link
+  - ARIA labels and roles
+  - Keyboard navigation improvements
+  - Screen reader announcements
+  - Improved focus styles
+- Database state indicator showing when data was last updated
+
+### Changed
+- Improved UI with better color contrast for accessibility
+- Enhanced user links with icon-based design
+- Updated "Map long and prosper" message with Vulcan salute emoji
+- Reorganized instructions in about page
+- Optimized CSS structure and removed redundant styles
+- Refactored JavaScript for better performance
+
+### Fixed
+- Various UI and layout issues
+- Improved error handling
+
 ## [1.0.7] - 2025-02-27
 
 ### Added
