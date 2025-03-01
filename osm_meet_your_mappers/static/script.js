@@ -24,6 +24,10 @@ const elements = {
   meetMappersBtn: document.querySelector("#meetMappers"),
   progress: document.querySelector(".progress-indicator"),
   results: document.querySelector("#results"),
+  filter: {
+    container: document.querySelector("#filter-container"),
+    input: document.querySelector("#user-filter"),
+  },
   export: {
     container: document.querySelector("#export-container"),
     button: document.querySelector(".export-csv-button"),
@@ -52,6 +56,23 @@ const utils = {
     )}]`;
   },
 };
+
+function setupAccessibilityAnnouncements() {
+  const announcer = document.createElement("div");
+  announcer.setAttribute("aria-live", "polite");
+  announcer.setAttribute("aria-atomic", "true");
+  announcer.className = "visually-hidden";
+  announcer.id = "a11y-announcer";
+  document.body.appendChild(announcer);
+}
+
+// Function to announce important changes to screen readers
+function announce(message) {
+  const announcer = document.getElementById("a11y-announcer");
+  if (announcer) {
+    announcer.textContent = message;
+  }
+}
 
 function friendlyDate(utcInput) {
   let date;
@@ -103,6 +124,7 @@ function updateStatus(message) {
   elements.status.textContent = message;
   elements.status.classList.add("flash");
   setTimeout(() => elements.status.classList.remove("flash"), 1000);
+  announce(message); // Announce the status message
 }
 
 // ================================
@@ -121,6 +143,13 @@ const ui = {
     elements.meetMappersBtn.disabled = false;
     elements.progress.style.visibility = "hidden";
     elements.progress.setAttribute("aria-hidden", "true");
+  },
+
+  updateFooter: async () => {
+    const versionElement = document.getElementById("app-version");
+    versionElement.textContent = await getAppVersion();
+    const latestElement = document.getElementById("latest");
+    latestElement.textContent = await getLatestChangesetTimestamp();
   },
 };
 
@@ -144,28 +173,16 @@ const dataHandler = {
     state.currentData = data;
     elements.export.container.style.display = data.length ? "block" : "none";
 
-    // Create filter input
-    const filterContainer = document.createElement("div");
-    filterContainer.className = "filter-container";
-    const filterInput = document.createElement("input");
-    filterInput.type = "text";
-    filterInput.placeholder = "Filter by username...";
-    filterInput.className = "user-filter";
-    filterInput.addEventListener("input", (e) => {
-      const searchTerm = e.target.value.toLowerCase();
-      const rows = tbody.querySelectorAll("tr");
-      rows.forEach((row) => {
-        const username = row.querySelector("td").textContent.toLowerCase();
-        row.style.display = username.includes(searchTerm) ? "" : "none";
-      });
-    });
-    filterContainer.appendChild(filterInput);
+    // Show the filter container
+    elements.filter.container.style.display = data.length ? "block" : "none";
+    elements.filter.input.value = ""; // Clear any previous filter
+
+    // Clear previous results
     elements.results.innerHTML = "";
-    elements.results.appendChild(filterContainer);
 
     // Define columns and create table structure
     const columns = [
-      { key: "username", label: "User", type: "string" },
+      { key: "username", label: "User", type: "string", showOsmchaLink: true },
       { key: "changeset_count", label: "Changeset Count", type: "number" },
       { key: "first_change", label: "First Change", type: "date" },
       { key: "last_change", label: "Last Change", type: "date" },
@@ -173,15 +190,32 @@ const dataHandler = {
 
     const table = document.createElement("table");
     table.className = "sortable-table";
+    table.setAttribute("aria-label", "OpenStreetMap mappers in selected area");
+
+    // Add a caption for screen readers
+    const caption = document.createElement("caption");
+    caption.className = "visually-hidden";
+    caption.textContent = "List of OpenStreetMap mappers in the selected area";
+    table.appendChild(caption);
+
     const thead = document.createElement("thead");
     const tbody = document.createElement("tbody");
 
     const headerRow = document.createElement("tr");
     columns.forEach((col, index) => {
       const th = document.createElement("th");
-      th.textContent = col.label;
+      th.setAttribute("aria-sort", "none");
       th.dataset.type = col.type;
       th.dataset.key = col.key;
+
+      // Create header content container
+      const headerContent = document.createElement("div");
+      headerContent.className = "header-content";
+      headerContent.textContent = col.label;
+
+      // We don't need the OSMCha icon in the header anymore
+
+      th.appendChild(headerContent);
 
       // Add sort direction indicator
       const indicator = document.createElement("span");
@@ -219,14 +253,19 @@ const dataHandler = {
           osmLink.className = "osm-link";
           linkContainer.appendChild(osmLink);
 
+          // Create a container for the icon links
+          const iconContainer = document.createElement("div");
+          iconContainer.className = "icon-links";
+          linkContainer.appendChild(iconContainer);
+
           // OSM Messaging link
           const messagingLink = document.createElement("a");
           messagingLink.href = `https://www.openstreetmap.org/messages/new/${value}`;
-          messagingLink.innerHTML = `<span title="Send a message to ${value} on OSM">✉️</span>`;
+          messagingLink.innerHTML = `<span title="Send a message to ${value} on OSM">👋🏻</span>`;
           messagingLink.target = "_blank";
           messagingLink.rel = "noopener noreferrer";
           messagingLink.className = "user-link";
-          linkContainer.appendChild(messagingLink);
+          iconContainer.appendChild(messagingLink);
 
           // OSMCha link
           if (state.currentBbox) {
@@ -239,11 +278,11 @@ const dataHandler = {
             const dateString = oneYearAgo.toISOString().split("T")[0]; // Format as YYYY-MM-DD
 
             osmchaLink.href = `https://osmcha.org/?filters=%7B%22users%22%3A%5B%7B%22label%22%3A%22${value}%22%2C%22value%22%3A%22${value}%22%7D%5D%2C%22in_bbox%22%3A%5B%7B%22label%22%3A%22${bbox}%22%2C%22value%22%3A%22${bbox}%22%7D%5D%2C%22date__gte%22%3A%5B%7B%22label%22%3A%22${dateString}%22%2C%22value%22%3A%22${dateString}%22%7D%5D%7D`;
-            osmchaLink.innerHTML = `<span title="View ${value}'s last year of edits for this area in OSMCha">OSMCha</span>`;
+            osmchaLink.innerHTML = `<span title="View in OSMCha">📊</span>`;
             osmchaLink.target = "_blank";
             osmchaLink.rel = "noopener noreferrer";
             osmchaLink.className = "user-link";
-            linkContainer.appendChild(osmchaLink);
+            iconContainer.appendChild(osmchaLink);
           }
 
           td.appendChild(linkContainer);
@@ -283,51 +322,22 @@ const dataHandler = {
 
     // Initial sort by changeset count (descending)
     this.sortTable(table, 1, "number", CONFIG.DATE_SORT_DESC);
-  },
 
-  exportToCsv() {
-    if (!state.currentData || state.currentData.length === 0) {
-      updateStatus("No data available for CSV export.");
-      return;
+    // Make sure the filter works with the initial data
+    if (elements.filter.input.value.trim()) {
+      const searchTerm = elements.filter.input.value.toLowerCase();
+      const rows = table.querySelectorAll("tbody tr");
+
+      rows.forEach((row) => {
+        const usernameCell = row.querySelector("td");
+        const usernameLink = usernameCell.querySelector("a.osm-link");
+        const username = usernameLink
+          ? usernameLink.textContent.toLowerCase()
+          : "";
+
+        row.style.display = username.includes(searchTerm) ? "" : "none";
+      });
     }
-
-    const headers = [
-      "username",
-      "changeset_count",
-      "first_change",
-      "last_change",
-    ];
-
-    const csvContent = [
-      headers.join(","),
-      ...state.currentData.map((row) => {
-        // Format dates for CSV
-        const firstChange = row.first_change
-          ? new Date(row.first_change).toISOString()
-          : "";
-        const lastChange = row.last_change
-          ? new Date(row.last_change).toISOString()
-          : "";
-        return [
-          `"${row.username}"`,
-          row.changeset_count,
-          firstChange,
-          lastChange,
-        ].join(",");
-      }),
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "osm_mappers_export.csv";
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   },
 
   sortTable(table, columnIndex, dataType, forceDescending = false) {
@@ -342,10 +352,12 @@ const dataHandler = {
     // Reset all headers
     headers.forEach((h) => {
       h.classList.remove("sort-asc", "sort-desc");
+      h.setAttribute("aria-sort", "none");
     });
 
     // Set new sort direction
     header.classList.add(isDescending ? "sort-desc" : "sort-asc");
+    header.setAttribute("aria-sort", isDescending ? "descending" : "ascending");
 
     // Sort the rows
     rows.sort((rowA, rowB) => {
@@ -527,6 +539,8 @@ async function handleMeetMappers() {
   }
 
   ui.showLoader();
+  ui.updateFooter();
+
   try {
     const data = await dataHandler.fetchMappers(state.currentBbox);
     updateStatus(`Success! Found ${data.length} mappers.`);
@@ -606,6 +620,31 @@ function updateAuthUI() {
 // ================================
 
 document.addEventListener("DOMContentLoaded", async () => {
+  // Set up filter functionality
+  elements.filter.input.addEventListener("input", (e) => {
+    setupAccessibilityAnnouncements();
+    applyFilter();
+  });
+
+  // Function to apply the current filter
+  function applyFilter() {
+    if (!state.currentData) return;
+
+    const searchTerm = elements.filter.input.value.toLowerCase();
+    const rows = document.querySelectorAll("#results table tbody tr");
+
+    rows.forEach((row) => {
+      const usernameCell = row.querySelector("td");
+      // Get the actual username text from the first link in the cell
+      const usernameLink = usernameCell.querySelector("a.osm-link");
+      const username = usernameLink
+        ? usernameLink.textContent.toLowerCase()
+        : "";
+
+      row.style.display = username.includes(searchTerm) ? "" : "none";
+    });
+  }
+
   // Check auth status, update UI, etc.
   await checkAuth();
   updateAuthUI();
@@ -632,11 +671,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   // Set version in footer
-  const versionElement = document.getElementById("app-version");
-  versionElement.textContent = await getAppVersion();
-  const latestElement = document.getElementById("latest");
-  latestElement.textContent = await getLatestChangesetTimestamp();
+  ui.updateFooter();
 
+  // Initialize map
   initializeMap();
   initializeSidebarButtons();
   elements.meetMappersBtn.addEventListener("click", handleMeetMappers);
