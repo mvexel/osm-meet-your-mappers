@@ -25,8 +25,10 @@
                     </small>
                 </p>
             </hgroup>
-            <div id="user-display" class="user-display" style="display: none;">
-                Logged in as <span class="username"></span>
+            <div id="user-display" class="user-display">
+                <span class="logged-in-text">
+                    <span class="logged-in-as">Logged in as</span> <span class="username"></span>
+                </span>
             </div>
         </div>
 
@@ -37,10 +39,13 @@
             <aside class="sidebar" aria-label="Map controls">
                 <div class="button-group">
                     <div class="button-row">
-                        <button id="logInOut" aria-label="Log in or out of OpenStreetMap">Log In with OSM</button>
+                        <button id="logInOut" class='secondary' aria-label="Log in or out of OpenStreetMap">Log In with
+                            OSM</button>
                         <button id="drawRect" disabled aria-label="Draw a rectangle on the map">Draw Rectangle</button>
                         <button id="meetMappers" disabled aria-label="Find mappers in the selected area">Meet My
                             Mappers</button>
+                        <button id="shareButton" class="share-button secondary" disabled aria-label="Copy shareable link to clipboard">Copy
+                            URL</button>
                     </div>
                 </div>
 
@@ -61,7 +66,7 @@
         <!-- Space for the table to go -->
         <div id="results"></div>
 
-        <!-- Export button for CSV -->
+        <!-- Export and Share buttons -->
         <div id="export-container" style="display: none;">
             <button class="export-csv-button" aria-label="Export mapper data to CSV file">Export to CSV</button>
         </div>

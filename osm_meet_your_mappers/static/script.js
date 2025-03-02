@@ -7,12 +7,19 @@ const CONFIG = {
   MAX_TABLE_ROWS: 100, // max number of rows to display (all will always be available in CSV)
   MAX_BOX_DEGREES: 1, // max allowed size on each side for the user drawn bbox
   INITIAL_STATUS: "Welcome! Please log in with your OSM account to continue.",
+  URL_PARAM_NAMES: {
+    MIN_LAT: "minlat",
+    MIN_LON: "minlon",
+    MAX_LAT: "maxlat",
+    MAX_LON: "maxlon",
+  },
 };
 
 const state = {
   currentBbox: null,
   currentData: null,
   osm: null,
+  urlUpdated: false, // Track if URL was updated to prevent loops
 };
 
 // ================================
@@ -31,6 +38,9 @@ const elements = {
   export: {
     container: document.querySelector("#export-container"),
     button: document.querySelector(".export-csv-button"),
+  },
+  share: {
+    button: document.querySelector("#shareButton"),
   },
   map: {
     drawRectBtn: document.querySelector("#drawRect"),
@@ -54,6 +64,64 @@ const utils = {
     )}] to [${utils.formatCoordinate(maxLon)}, ${utils.formatCoordinate(
       maxLat
     )}]`;
+  },
+
+  // Update URL with bbox parameters
+  updateUrlWithBbox: (bbox) => {
+    if (!bbox || state.urlUpdated) return;
+
+    const url = new URL(window.location);
+    url.searchParams.set(
+      CONFIG.URL_PARAM_NAMES.MIN_LAT,
+      bbox.minLat.toFixed(6)
+    );
+    url.searchParams.set(
+      CONFIG.URL_PARAM_NAMES.MIN_LON,
+      bbox.minLon.toFixed(6)
+    );
+    url.searchParams.set(
+      CONFIG.URL_PARAM_NAMES.MAX_LAT,
+      bbox.maxLat.toFixed(6)
+    );
+    url.searchParams.set(
+      CONFIG.URL_PARAM_NAMES.MAX_LON,
+      bbox.maxLon.toFixed(6)
+    );
+
+    // Update URL without reloading the page
+    window.history.pushState({}, "", url);
+  },
+
+  // Get bbox from URL parameters
+  getBboxFromUrl: () => {
+    const url = new URL(window.location);
+    const minLat = parseFloat(
+      url.searchParams.get(CONFIG.URL_PARAM_NAMES.MIN_LAT)
+    );
+    const minLon = parseFloat(
+      url.searchParams.get(CONFIG.URL_PARAM_NAMES.MIN_LON)
+    );
+    const maxLat = parseFloat(
+      url.searchParams.get(CONFIG.URL_PARAM_NAMES.MAX_LAT)
+    );
+    const maxLon = parseFloat(
+      url.searchParams.get(CONFIG.URL_PARAM_NAMES.MAX_LON)
+    );
+
+    // Check if all parameters exist and are valid numbers
+    if (isNaN(minLat) || isNaN(minLon) || isNaN(maxLat) || isNaN(maxLon)) {
+      return null;
+    }
+
+    // Validate the bbox size
+    if (
+      Math.abs(maxLon - minLon) > CONFIG.MAX_BOX_DEGREES ||
+      Math.abs(maxLat - minLat) > CONFIG.MAX_BOX_DEGREES
+    ) {
+      return null;
+    }
+
+    return { minLat, minLon, maxLat, maxLon };
   },
 };
 
@@ -171,10 +239,14 @@ const dataHandler = {
 
   displayMappers(data) {
     state.currentData = data;
-    elements.export.container.style.display = data.length ? "block" : "none";
+    const hasData = data.length > 0;
+    elements.export.container.style.display = hasData ? "block" : "none";
+    
+    // Enable/disable share button based on data
+    elements.share.button.disabled = !hasData;
 
     // Show the filter container
-    elements.filter.container.style.display = data.length ? "block" : "none";
+    elements.filter.container.style.display = hasData ? "block" : "none";
     elements.filter.input.value = ""; // Clear any previous filter
 
     // Clear previous results
@@ -451,30 +523,58 @@ function initializeMap() {
     attribution: "&copy; OpenStreetMap contributors",
   }).addTo(map);
 
-  // Attempt geolocate
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
-        map.setView([lat, lon], 10);
-      },
-      (error) => {
-        console.error("Geolocation error:", error);
-      },
-      {
-        enableHighAccuracy: false,
-        timeout: 5000,
-        maximumAge: 0,
-      }
-    );
-  } else {
-    console.log("Geolocation is not supported by this browser.");
-  }
-
   // group to hold box
   drawnItems = new L.FeatureGroup();
   map.addLayer(drawnItems);
+
+  // Check for bbox in URL first
+  const urlBbox = utils.getBboxFromUrl();
+  if (urlBbox) {
+    // Create a rectangle from the URL parameters
+    const bounds = L.latLngBounds(
+      L.latLng(urlBbox.minLat, urlBbox.minLon),
+      L.latLng(urlBbox.maxLat, urlBbox.maxLon)
+    );
+
+    // Add the rectangle to the map
+    const layer = L.rectangle(bounds, {
+      color: "#ff0000",
+      weight: 2,
+    });
+    drawnItems.addLayer(layer);
+
+    // Set the bbox in state
+    state.currentBbox = urlBbox;
+    state.urlUpdated = true; // Prevent updating URL again
+
+    // Zoom to the bbox
+    map.fitBounds(bounds);
+
+    // Enable the Meet Mappers button
+    elements.meetMappersBtn.disabled = false;
+    updateStatus("Bounding box loaded from URL!");
+  } else {
+    // Attempt geolocate if no bbox in URL
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          map.setView([lat, lon], 10);
+        },
+        (error) => {
+          console.error("Geolocation error:", error);
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 5000,
+          maximumAge: 0,
+        }
+      );
+    } else {
+      console.log("Geolocation is not supported by this browser.");
+    }
+  }
 
   // We're not using the native buttons so...
   drawRectangle = new L.Draw.Rectangle(map, {
@@ -509,6 +609,9 @@ function initializeMap() {
         maxLat: ne.lat,
         maxLon: ne.lng,
       };
+
+      // Update URL with the new bbox
+      utils.updateUrlWithBbox(state.currentBbox);
 
       elements.meetMappersBtn.disabled = false;
       updateStatus("Bounding box OK!");
@@ -601,17 +704,19 @@ async function checkAuth() {
 
 function updateAuthUI() {
   const userDisplay = document.getElementById("user-display");
+
   if (state.osm) {
     elements.auth.logInOutBtn.textContent = "Log Out";
     elements.map.drawRectBtn.disabled = false;
-    userDisplay.style.display = "block";
+    userDisplay.querySelector(".logged-in-as").textContent = "Logged in as";
     userDisplay.querySelector(".username").textContent =
-      state.osm.user.display_name;
+      `@` + state.osm.user.display_name;
   } else {
     elements.auth.logInOutBtn.textContent = "Log In with OSM";
     elements.map.drawRectBtn.disabled = true;
     elements.meetMappersBtn.disabled = true;
-    userDisplay.style.display = "none";
+    userDisplay.querySelector(".logged-in-as").textContent = "Not logged in";
+    userDisplay.querySelector(".username").textContent = "";
   }
 }
 
@@ -659,6 +764,14 @@ document.addEventListener("DOMContentLoaded", async () => {
           credentials: "include",
         });
         state.osm = null;
+        
+        // Clear the table and reset UI elements
+        elements.results.innerHTML = "";
+        elements.filter.container.style.display = "none";
+        elements.export.container.style.display = "none";
+        elements.share.button.disabled = true;
+        state.currentData = null;
+        
         updateAuthUI();
         updateStatus("Successfully logged out");
       } catch (error) {
@@ -678,10 +791,90 @@ document.addEventListener("DOMContentLoaded", async () => {
   initializeSidebarButtons();
   elements.meetMappersBtn.addEventListener("click", handleMeetMappers);
 
+  // Handle popstate events (back/forward browser navigation)
+  window.addEventListener("popstate", () => {
+    // Clear current bbox and drawn items
+    state.currentBbox = null;
+    drawnItems.clearLayers();
+    
+    // Disable share button when navigation occurs
+    elements.share.button.disabled = true;
+
+    // Check for bbox in URL
+    const urlBbox = utils.getBboxFromUrl();
+    if (urlBbox) {
+      // Create a rectangle from the URL parameters
+      const bounds = L.latLngBounds(
+        L.latLng(urlBbox.minLat, urlBbox.minLon),
+        L.latLng(urlBbox.maxLat, urlBbox.maxLon)
+      );
+
+      // Add the rectangle to the map
+      const layer = L.rectangle(bounds, {
+        color: "#ff0000",
+        weight: 2,
+      });
+      drawnItems.addLayer(layer);
+
+      // Set the bbox in state
+      state.currentBbox = urlBbox;
+
+      // Zoom to the bbox
+      map.fitBounds(bounds);
+
+      // Enable the Meet Mappers button
+      elements.meetMappersBtn.disabled = false;
+      updateStatus("Bounding box loaded from URL!");
+    }
+  });
+
+  // Create toast element for notifications
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  document.body.appendChild(toast);
+
+  // Function to show toast notification
+  function showToast(message) {
+    toast.textContent = message;
+    toast.className = 'toast show';
+    setTimeout(() => {
+      toast.className = toast.className.replace('show', '');
+    }, 3000);
+  }
+
+  // Share button functionality
+  function handleShare() {
+    if (!state.currentBbox || !state.currentData || state.currentData.length === 0) return;
+    
+    try {
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        showToast('Link copied to clipboard!');
+        announce('Link copied to clipboard!');
+      }, (err) => {
+        console.error('Could not copy text: ', err);
+        showToast('Failed to copy link');
+      });
+    } catch (err) {
+      console.error('Clipboard API not available: ', err);
+      // Fallback for browsers that don't support clipboard API
+      const dummy = document.createElement('textarea');
+      document.body.appendChild(dummy);
+      dummy.value = window.location.href;
+      dummy.select();
+      document.execCommand('copy');
+      document.body.removeChild(dummy);
+      showToast('Link copied to clipboard!');
+      announce('Link copied to clipboard!');
+    }
+  }
+
   // Attach the CSV export listener once
   elements.export.button.addEventListener("click", () =>
     dataHandler.exportToCsv()
   );
+  
+  // Attach the share button listener
+  elements.share.button.addEventListener("click", handleShare);
 
   updateStatus(
     state.osm
