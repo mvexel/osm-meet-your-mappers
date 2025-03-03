@@ -237,8 +237,14 @@ const dataHandler = {
     return response.json();
   },
 
-  displayMappers(data) {
-    state.currentData = data;
+  displayMappers(data, isFiltered = false) {
+    if (!isFiltered) {
+      // Only update the full dataset when not filtering
+      state.currentData = data;
+      // Clear filter when displaying new data
+      elements.filter.input.value = "";
+    }
+    
     const hasData = data.length > 0;
     elements.export.container.style.display = hasData ? "block" : "none";
     
@@ -247,8 +253,7 @@ const dataHandler = {
 
     // Show the filter container
     elements.filter.container.style.display = hasData ? "block" : "none";
-    elements.filter.input.value = ""; // Clear any previous filter
-
+    
     // Clear previous results
     elements.results.innerHTML = "";
 
@@ -388,7 +393,15 @@ const dataHandler = {
     if (data.length > maxRows) {
       const notice = document.createElement("div");
       notice.className = "truncation-notice";
-      notice.textContent = `Showing only the first ${maxRows} of ${data.length} rows. Download the CSV file to see all mappers!`;
+      
+      if (elements.filter.input.value.trim()) {
+        // When filtering
+        notice.textContent = `Showing ${Math.min(maxRows, data.length)} of ${data.length} matching mappers. Download the CSV file to see all results!`;
+      } else {
+        // Normal case (no filter)
+        notice.textContent = `Showing only the first ${maxRows} of ${data.length} mappers. Download the CSV file to see all mappers!`;
+      }
+      
       elements.results.appendChild(notice);
     }
 
@@ -736,18 +749,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!state.currentData) return;
 
     const searchTerm = elements.filter.input.value.toLowerCase();
-    const rows = document.querySelectorAll("#results table tbody tr");
-
-    rows.forEach((row) => {
-      const usernameCell = row.querySelector("td");
-      // Get the actual username text from the first link in the cell
-      const usernameLink = usernameCell.querySelector("a.osm-link");
-      const username = usernameLink
-        ? usernameLink.textContent.toLowerCase()
-        : "";
-
-      row.style.display = username.includes(searchTerm) ? "" : "none";
-    });
+    
+    if (searchTerm === "") {
+      // If no filter, just display the original table with pagination
+      dataHandler.displayMappers(state.currentData);
+      return;
+    }
+    
+    // Filter the full dataset
+    const filteredData = state.currentData.filter(item => 
+      item.username.toLowerCase().includes(searchTerm)
+    );
+    
+    // Display the filtered data
+    dataHandler.displayMappers(filteredData, true);
+    
+    // Update status to show filter results
+    updateStatus(`Found ${filteredData.length} mappers matching "${searchTerm}"`);
   }
 
   // Check auth status, update UI, etc.
