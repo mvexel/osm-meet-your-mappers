@@ -145,6 +145,7 @@ WHERE rc.rank <= 5;
 
 CREATE INDEX idx_user_activity_centers_mv_username ON user_activity_centers_mv(username);
 CREATE INDEX idx_user_activity_centers_mv_cluster_center ON user_activity_centers_mv USING GIST(cluster_center);
+CREATE UNIQUE INDEX idx_user_activity_centers_mv_unique ON user_activity_centers_mv (cluster_id, username);  -- needed for concurrent refresh
 
 -- Schedule refresh every 1h
 DO $$
