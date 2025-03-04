@@ -60,24 +60,17 @@ A web site and API that lets mappers find their local mapping friends.
 
 ## 5. Upgrading
 
-When there’s a new release or you’ve pulled changes from Git:
-
 1. **Pull latest code from Git**:
    ```bash
    git pull
    ```
-2. **Update dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+
+2. Check `setup_db.sql` for changes since your currently running version and apply them.
+
 3. **Rebuild the Docker images**:
    ```bash
-   docker compose down -v
-   docker compose build --no-cache
-   docker compose up -d
+   docker compose --profile production up --build -d
    ```
-4. **Check** `CHANGELOG.md` for version-specific upgrade notes.
-
 ---
 
 ## 6. Summary of Key Environment Variables
