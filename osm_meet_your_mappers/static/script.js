@@ -57,7 +57,24 @@ const elements = {
 const utils = {
   formatCoordinate: (num) => num.toFixed(4),
 
+  // Simple hash function for polygon coordinates
+  hashCoordinates: (coords) => {
+    return btoa(JSON.stringify(coords)).replace(/=/g, '');
+  },
+
+  // Unhash coordinates
+  unhashCoordinates: (hash) => {
+    try {
+      return JSON.parse(atob(hash));
+    } catch (e) {
+      return null;
+    }
+  },
+
   createBboxString: (bbox) => {
+    if (bbox.polygon) {
+      return "Custom Polygon Area";
+    }
     const { minLon, minLat, maxLon, maxLat } = bbox;
     return `[${utils.formatCoordinate(minLon)}, ${utils.formatCoordinate(
       minLat
@@ -66,54 +83,65 @@ const utils = {
     )}]`;
   },
 
-  // Update URL with bbox parameters
+  // Update URL with bbox or polygon parameters
   updateUrlWithBbox: (bbox) => {
-    if (!bbox || state.urlUpdated) return;
+    if (!bbox) return;
 
     const url = new URL(window.location);
-    url.searchParams.set(
-      CONFIG.URL_PARAM_NAMES.MIN_LAT,
-      bbox.minLat.toFixed(6)
-    );
-    url.searchParams.set(
-      CONFIG.URL_PARAM_NAMES.MIN_LON,
-      bbox.minLon.toFixed(6)
-    );
-    url.searchParams.set(
-      CONFIG.URL_PARAM_NAMES.MAX_LAT,
-      bbox.maxLat.toFixed(6)
-    );
-    url.searchParams.set(
-      CONFIG.URL_PARAM_NAMES.MAX_LON,
-      bbox.maxLon.toFixed(6)
-    );
+    url.searchParams.delete(CONFIG.URL_PARAM_NAMES.MIN_LAT);
+    url.searchParams.delete(CONFIG.URL_PARAM_NAMES.MIN_LON);
+    url.searchParams.delete(CONFIG.URL_PARAM_NAMES.MAX_LAT);
+    url.searchParams.delete(CONFIG.URL_PARAM_NAMES.MAX_LON);
+    url.searchParams.delete('polygon');
 
-    // Update URL without reloading the page
+    if (bbox.polygon) {
+      // For polygons, we'll hash the coordinates
+      const coords = bbox.polygon
+        .replace('POLYGON((', '')
+        .replace('))', '')
+        .split(',')
+        .map(pair => pair.split(' ').map(Number));
+      const hash = utils.hashCoordinates(coords);
+      url.searchParams.set('polygon', hash);
+    } else {
+      // For regular bbox
+      url.searchParams.set(CONFIG.URL_PARAM_NAMES.MIN_LAT, bbox.minLat.toFixed(6));
+      url.searchParams.set(CONFIG.URL_PARAM_NAMES.MIN_LON, bbox.minLon.toFixed(6));
+      url.searchParams.set(CONFIG.URL_PARAM_NAMES.MAX_LAT, bbox.maxLat.toFixed(6));
+      url.searchParams.set(CONFIG.URL_PARAM_NAMES.MAX_LON, bbox.maxLon.toFixed(6));
+    }
+
     window.history.pushState({}, "", url);
+    state.urlUpdated = true;
   },
 
-  // Get bbox from URL parameters
+  // Get bbox or polygon from URL parameters
   getBboxFromUrl: () => {
     const url = new URL(window.location);
-    const minLat = parseFloat(
-      url.searchParams.get(CONFIG.URL_PARAM_NAMES.MIN_LAT)
-    );
-    const minLon = parseFloat(
-      url.searchParams.get(CONFIG.URL_PARAM_NAMES.MIN_LON)
-    );
-    const maxLat = parseFloat(
-      url.searchParams.get(CONFIG.URL_PARAM_NAMES.MAX_LAT)
-    );
-    const maxLon = parseFloat(
-      url.searchParams.get(CONFIG.URL_PARAM_NAMES.MAX_LON)
-    );
+    
+    // Check for polygon first
+    const polygonHash = url.searchParams.get('polygon');
+    if (polygonHash) {
+      const coords = utils.unhashCoordinates(polygonHash);
+      if (!coords) return null;
+      
+      // Reconstruct WKT polygon
+      const wktCoords = coords.map(c => c.join(' ')).join(',');
+      return {
+        polygon: `POLYGON((${wktCoords}))`
+      };
+    }
 
-    // Check if all parameters exist and are valid numbers
+    // Fall back to bbox
+    const minLat = parseFloat(url.searchParams.get(CONFIG.URL_PARAM_NAMES.MIN_LAT));
+    const minLon = parseFloat(url.searchParams.get(CONFIG.URL_PARAM_NAMES.MIN_LON));
+    const maxLat = parseFloat(url.searchParams.get(CONFIG.URL_PARAM_NAMES.MAX_LAT));
+    const maxLon = parseFloat(url.searchParams.get(CONFIG.URL_PARAM_NAMES.MAX_LON));
+
     if (isNaN(minLat) || isNaN(minLon) || isNaN(maxLat) || isNaN(maxLon)) {
       return null;
     }
 
-    // Validate the bbox size
     if (
       Math.abs(maxLon - minLon) > CONFIG.MAX_BOX_DEGREES ||
       Math.abs(maxLat - minLat) > CONFIG.MAX_BOX_DEGREES
@@ -227,12 +255,17 @@ const ui = {
 
 const dataHandler = {
   async fetchMappers(bbox) {
-    const params = new URLSearchParams({
-      min_lon: bbox.minLon,
-      max_lon: bbox.maxLon,
-      min_lat: bbox.minLat,
-      max_lat: bbox.maxLat,
-    });
+    const params = new URLSearchParams();
+    
+    if (bbox.polygon) {
+      params.set('polygon', bbox.polygon);
+    } else {
+      params.set('min_lon', bbox.minLon);
+      params.set('max_lon', bbox.maxLon);
+      params.set('min_lat', bbox.minLat);
+      params.set('max_lat', bbox.maxLat);
+    }
+    
     const response = await fetch(`/mappers/?${params}`);
     return response.json();
   },
@@ -528,7 +561,7 @@ const dataHandler = {
 // Map & Drawing Integration
 // ================================
 
-let map, drawnItems, drawRectangle;
+let map, drawnItems, drawRectangle, drawPolygon;
 
 function initializeMap() {
   map = L.map("map", { zoomControl: false }).setView([51.505, -0.09], 13);
@@ -540,32 +573,62 @@ function initializeMap() {
   drawnItems = new L.FeatureGroup();
   map.addLayer(drawnItems);
 
-  // Check for bbox in URL first
+  // Check for bbox or polygon in URL first
   const urlBbox = utils.getBboxFromUrl();
   if (urlBbox) {
-    // Create a rectangle from the URL parameters
-    const bounds = L.latLngBounds(
-      L.latLng(urlBbox.minLat, urlBbox.minLon),
-      L.latLng(urlBbox.maxLat, urlBbox.maxLon)
-    );
+    if (urlBbox.polygon) {
+      // Handle polygon
+      const coords = urlBbox.polygon
+        .replace('POLYGON((', '')
+        .replace('))', '')
+        .split(',')
+        .map(pair => {
+          const [lng, lat] = pair.split(' ').map(Number);
+          return [lat, lng];
+        });
+        
+      const layer = L.polygon(coords, {
+        color: "#ff0000",
+        weight: 2,
+        fillOpacity: 0.2
+      });
+      drawnItems.addLayer(layer);
+        
+      // Set the bbox in state
+      state.currentBbox = urlBbox;
+      state.urlUpdated = true;
+        
+      // Zoom to polygon bounds
+      map.fitBounds(layer.getBounds());
+        
+      // Enable the Meet Mappers button
+      elements.meetMappersBtn.disabled = false;
+      updateStatus("Polygon loaded from URL!");
+    } else {
+      // Handle regular bbox
+      const bounds = L.latLngBounds(
+        L.latLng(urlBbox.minLat, urlBbox.minLon),
+        L.latLng(urlBbox.maxLat, urlBbox.maxLon)
+      );
 
-    // Add the rectangle to the map
-    const layer = L.rectangle(bounds, {
-      color: "#ff0000",
-      weight: 2,
-    });
-    drawnItems.addLayer(layer);
+      // Add the rectangle to the map
+      const layer = L.rectangle(bounds, {
+        color: "#ff0000",
+        weight: 2,
+      });
+      drawnItems.addLayer(layer);
 
-    // Set the bbox in state
-    state.currentBbox = urlBbox;
-    state.urlUpdated = true; // Prevent updating URL again
+      // Set the bbox in state
+      state.currentBbox = urlBbox;
+      state.urlUpdated = true;
 
-    // Zoom to the bbox
-    map.fitBounds(bounds);
+      // Zoom to the bbox
+      map.fitBounds(bounds);
 
-    // Enable the Meet Mappers button
-    elements.meetMappersBtn.disabled = false;
-    updateStatus("Bounding box loaded from URL!");
+      // Enable the Meet Mappers button
+      elements.meetMappersBtn.disabled = false;
+      updateStatus("Bounding box loaded from URL!");
+    }
   } else {
     // Attempt geolocate if no bbox in URL
     if (navigator.geolocation) {
@@ -589,12 +652,22 @@ function initializeMap() {
     }
   }
 
-  // We're not using the native buttons so...
+  // Initialize drawing tools
   drawRectangle = new L.Draw.Rectangle(map, {
     shapeOptions: {
       color: "#ff0000",
       weight: 2,
     },
+  });
+
+  drawPolygon = new L.Draw.Polygon(map, {
+    shapeOptions: {
+      color: "#ff0000",
+      weight: 2,
+      fillOpacity: 0.2
+    },
+    allowIntersection: false,
+    showArea: true
   });
 
   // Listen
@@ -605,23 +678,51 @@ function initializeMap() {
     drawnItems.addLayer(layer);
 
     // Extract bounds
-    const bounds = layer.getBounds();
-    const sw = bounds.getSouthWest().wrap();
-    const ne = bounds.getNorthEast().wrap();
-    if (
-      Math.abs(ne.lng - sw.lng) > CONFIG.MAX_BOX_DEGREES ||
-      Math.abs(ne.lat - sw.lat) > CONFIG.MAX_BOX_DEGREES
-    ) {
-      state.currentBbox = null;
-      drawnItems.clearLayers();
-      updateStatus("Box is too huge, try something smaller.");
-    } else {
-      state.currentBbox = {
+    let bbox;
+    if (layer instanceof L.Rectangle) {
+      const bounds = layer.getBounds();
+      const sw = bounds.getSouthWest().wrap();
+      const ne = bounds.getNorthEast().wrap();
+      if (
+        Math.abs(ne.lng - sw.lng) > CONFIG.MAX_BOX_DEGREES ||
+        Math.abs(ne.lat - sw.lat) > CONFIG.MAX_BOX_DEGREES
+      ) {
+        state.currentBbox = null;
+        drawnItems.clearLayers();
+        updateStatus("Area is too large, try something smaller.");
+        return;
+      }
+      bbox = {
         minLat: sw.lat,
         minLon: sw.lng,
         maxLat: ne.lat,
         maxLon: ne.lng,
       };
+    } else if (layer instanceof L.Polygon) {
+      const bounds = layer.getBounds();
+      const sw = bounds.getSouthWest().wrap();
+      const ne = bounds.getNorthEast().wrap();
+      if (
+        Math.abs(ne.lng - sw.lng) > CONFIG.MAX_BOX_DEGREES ||
+        Math.abs(ne.lat - sw.lat) > CONFIG.MAX_BOX_DEGREES
+      ) {
+        state.currentBbox = null;
+        drawnItems.clearLayers();
+        updateStatus("Area is too large, try something smaller.");
+        return;
+      }
+      // Convert polygon to WKT format
+      const points = layer.getLatLngs()[0];
+      // Create coordinate string and ensure polygon is closed by repeating first point
+      const coords = points.map(ll => `${ll.lng} ${ll.lat}`).join(',');
+      const firstPoint = `${points[0].lng} ${points[0].lat}`;
+      bbox = {
+        polygon: `POLYGON((${coords},${firstPoint}))`
+      };
+    }
+    
+    if (bbox) {
+      state.currentBbox = bbox;
 
       // Update URL with the new bbox
       utils.updateUrlWithBbox(state.currentBbox);
@@ -637,10 +738,25 @@ function initializeMap() {
 // ================================
 
 function initializeSidebarButtons() {
-  // trigger draw handler
+  // Rectangle draw handler
   elements.map.drawRectBtn.addEventListener("click", () => {
     drawnItems.clearLayers();
+    // Disable polygon drawing first
+    if (drawPolygon._enabled) {
+      drawPolygon.disable();
+    }
     drawRectangle.enable();
+  });
+
+  // Polygon draw handler
+  const drawPolygonBtn = document.getElementById("drawPolygon");
+  drawPolygonBtn.addEventListener("click", () => {
+    drawnItems.clearLayers();
+    // Disable rectangle drawing first
+    if (drawRectangle._enabled) {
+      drawRectangle.disable();
+    }
+    drawPolygon.enable();
   });
 }
 
@@ -721,12 +837,14 @@ function updateAuthUI() {
   if (state.osm) {
     elements.auth.logInOutBtn.textContent = "Log Out";
     elements.map.drawRectBtn.disabled = false;
+    document.getElementById("drawPolygon").disabled = false;
     userDisplay.querySelector(".logged-in-as").textContent = "Logged in as";
     userDisplay.querySelector(".username").textContent =
       `@` + state.osm.user.display_name;
   } else {
     elements.auth.logInOutBtn.textContent = "Log In with OSM";
     elements.map.drawRectBtn.disabled = true;
+    document.getElementById("drawPolygon").disabled = true;
     elements.meetMappersBtn.disabled = true;
     userDisplay.querySelector(".logged-in-as").textContent = "Not logged in";
     userDisplay.querySelector(".username").textContent = "";

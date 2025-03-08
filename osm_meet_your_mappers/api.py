@@ -287,10 +287,11 @@ AND ST_Intersects(
     response_description="List of mapper statistics",
 )
 async def get_mappers(
-    min_lon: float = Query(..., description="Minimum longitude", ge=-180, le=180),
-    max_lon: float = Query(..., description="Maximum longitude", ge=-180, le=180),
-    min_lat: float = Query(..., description="Minimum latitude", ge=-90, le=90),
-    max_lat: float = Query(..., description="Maximum latitude", ge=-90, le=90),
+    min_lon: Optional[float] = Query(None, description="Minimum longitude", ge=-180, le=180),
+    max_lon: Optional[float] = Query(None, description="Maximum longitude", ge=-180, le=180),
+    min_lat: Optional[float] = Query(None, description="Minimum latitude", ge=-90, le=90),
+    max_lat: Optional[float] = Query(None, description="Maximum latitude", ge=-90, le=90),
+    polygon: Optional[str] = Query(None, description="Polygon in WKT format"),
     min_changesets: int = Query(
         os.getenv("MIN_CHANGESETS"), description="Minimum number of changesets", ge=1
     ),
@@ -311,9 +312,11 @@ SELECT
 FROM changesets
 WHERE
     (ST_XMax(bbox) - ST_XMin(bbox)) < %s AND (ST_YMax(bbox) - ST_YMin(bbox)) < %s
-AND ST_Intersects(
-    ST_MakeEnvelope(%s, %s, %s, %s, 4326), 
-    bbox
+AND (
+    CASE
+        WHEN %s IS NOT NULL THEN ST_Intersects(bbox, ST_SetSRID(ST_GeomFromText(%s), 4326))
+        ELSE ST_Intersects(bbox, ST_MakeEnvelope(%s, %s, %s, %s, 4326))
+    END
 )
 GROUP BY username
 HAVING COUNT(id) >= %s
@@ -324,6 +327,8 @@ ORDER BY changeset_count DESC
                 (
                     os.getenv("MAX_BBOX_FOR_LOCAL", "0.1"),
                     os.getenv("MAX_BBOX_FOR_LOCAL", "0.1"),
+                    polygon,
+                    polygon,
                     min_lon,
                     min_lat,
                     max_lon,
