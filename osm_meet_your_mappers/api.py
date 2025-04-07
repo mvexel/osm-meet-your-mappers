@@ -287,10 +287,18 @@ AND ST_Intersects(
     response_description="List of mapper statistics",
 )
 async def get_mappers(
-    min_lon: Optional[float] = Query(None, description="Minimum longitude", ge=-180, le=180),
-    max_lon: Optional[float] = Query(None, description="Maximum longitude", ge=-180, le=180),
-    min_lat: Optional[float] = Query(None, description="Minimum latitude", ge=-90, le=90),
-    max_lat: Optional[float] = Query(None, description="Maximum latitude", ge=-90, le=90),
+    min_lon: Optional[float] = Query(
+        None, description="Minimum longitude", ge=-180, le=180
+    ),
+    max_lon: Optional[float] = Query(
+        None, description="Maximum longitude", ge=-180, le=180
+    ),
+    min_lat: Optional[float] = Query(
+        None, description="Minimum latitude", ge=-90, le=90
+    ),
+    max_lat: Optional[float] = Query(
+        None, description="Maximum latitude", ge=-90, le=90
+    ),
     polygon: Optional[str] = Query(None, description="Polygon in WKT format"),
     min_changesets: int = Query(
         os.getenv("MIN_CHANGESETS"), description="Minimum number of changesets", ge=1
