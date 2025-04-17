@@ -31,7 +31,10 @@ app = FastAPI()
 
 # Add session middleware (required for storing temporary credentials)
 app.add_middleware(
-    SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "CHANGE_ME")
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET", "CHANGE_ME"),
+    https_only=True,  # ensures cookie is only sent over HTTPS
+    same_site="lax",  # "lax" is usually fine for OAuth
 )
 
 # Initialize the OAuth instance
