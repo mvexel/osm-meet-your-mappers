@@ -1,4 +1,4 @@
-FROM ghcr.io/baosystems/postgis:17
+FROM postgis/postgis:17-master
 
 RUN apt-get update && apt-get install -y \
     build-essential \
