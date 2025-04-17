@@ -728,7 +728,11 @@ function initializeMap() {
       utils.updateUrlWithBbox(state.currentBbox);
 
       elements.meetMappersBtn.disabled = false;
-      updateStatus("Bounding box OK!");
+      if (bbox.polygon) {
+        updateStatus("Polygon OK!");
+      } else {
+        updateStatus("Bounding box OK!");
+      }
     }
   });
 }
