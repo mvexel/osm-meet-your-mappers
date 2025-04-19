@@ -380,7 +380,23 @@ const dataHandler = {
           // OSMCha link
           if (state.currentBbox) {
             const osmchaLink = document.createElement("a");
-            const bbox = `${state.currentBbox.minLon},${state.currentBbox.minLat},${state.currentBbox.maxLon},${state.currentBbox.maxLat}`;
+            let bbox;
+
+            if (state.currentBbox.polygon && drawnItems.getLayers().length > 0) {
+              // It's a polygon, get bounds from the drawn layer
+              const layer = drawnItems.getLayers()[0];
+              const bounds = layer.getBounds();
+              const sw = bounds.getSouthWest().wrap();
+              const ne = bounds.getNorthEast().wrap();
+              bbox = `${sw.lng},${sw.lat},${ne.lng},${ne.lat}`;
+            } else if (state.currentBbox.minLon !== undefined) {
+              // It's a rectangle (or has bbox properties)
+              bbox = `${state.currentBbox.minLon},${state.currentBbox.minLat},${state.currentBbox.maxLon},${state.currentBbox.maxLat}`;
+            } else {
+              // Fallback or error case - should not happen if state.currentBbox is valid
+              console.error("Could not determine bbox for OSMCha link from:", state.currentBbox);
+              bbox = "0,0,0,0"; // Provide a default invalid bbox
+            }
 
             // Calculate date 1 year ago for the filter
             const oneYearAgo = new Date();
