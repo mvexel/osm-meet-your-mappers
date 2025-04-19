@@ -4,7 +4,6 @@ volumes:
 
 services:
   db:
-    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile_db
