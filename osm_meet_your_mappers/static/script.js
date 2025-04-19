@@ -380,30 +380,48 @@ const dataHandler = {
           // OSMCha link
           if (state.currentBbox) {
             const osmchaLink = document.createElement("a");
-            let bbox;
+            let filters = {};
 
-            if (state.currentBbox.polygon && drawnItems.getLayers().length > 0) {
-              // It's a polygon, get bounds from the drawn layer
-              const layer = drawnItems.getLayers()[0];
-              const bounds = layer.getBounds();
-              const sw = bounds.getSouthWest().wrap();
-              const ne = bounds.getNorthEast().wrap();
-              bbox = `${sw.lng},${sw.lat},${ne.lng},${ne.lat}`;
-            } else if (state.currentBbox.minLon !== undefined) {
-              // It's a rectangle (or has bbox properties)
-              bbox = `${state.currentBbox.minLon},${state.currentBbox.minLat},${state.currentBbox.maxLon},${state.currentBbox.maxLat}`;
-            } else {
-              // Fallback or error case - should not happen if state.currentBbox is valid
-              console.error("Could not determine bbox for OSMCha link from:", state.currentBbox);
-              bbox = "0,0,0,0"; // Provide a default invalid bbox
-            }
-
-            // Calculate date 1 year ago for the filter
+            // Calculate date 1 year ago for the filter (common part)
             const oneYearAgo = new Date();
             oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
             const dateString = oneYearAgo.toISOString().split("T")[0]; // Format as YYYY-MM-DD
 
-            osmchaLink.href = `https://osmcha.org/?filters=%7B%22users%22%3A%5B%7B%22label%22%3A%22${value}%22%2C%22value%22%3A%22${value}%22%7D%5D%2C%22in_bbox%22%3A%5B%7B%22label%22%3A%22${bbox}%22%2C%22value%22%3A%22${bbox}%22%7D%5D%2C%22date__gte%22%3A%5B%7B%22label%22%3A%22${dateString}%22%2C%22value%22%3A%22${dateString}%22%7D%5D%7D`;
+            // Base filters
+            filters.users = [{ label: value, value: value }];
+            filters.date__gte = [{ label: dateString, value: dateString }];
+
+            if (state.currentBbox.polygon && drawnItems.getLayers().length > 0) {
+              // It's a polygon, use geometry filter
+              const layer = drawnItems.getLayers()[0];
+              const latLngs = layer.getLatLngs()[0]; // Get LatLngs of the outer ring
+              // Convert to GeoJSON format [lng, lat] and close the ring
+              const coordinates = latLngs.map(ll => [ll.lng, ll.lat]);
+              coordinates.push(coordinates[0]); // Ensure the polygon is closed
+
+              const geoJsonPolygon = {
+                type: "Polygon",
+                coordinates: [coordinates] // GeoJSON Polygon needs an array of rings
+              };
+
+              // OSMCha expects the geometry object directly in label and value
+              filters.geometry = [{ label: geoJsonPolygon, value: geoJsonPolygon }];
+
+            } else if (state.currentBbox.minLon !== undefined) {
+              // It's a rectangle, use in_bbox filter
+              const bbox = `${state.currentBbox.minLon},${state.currentBbox.minLat},${state.currentBbox.maxLon},${state.currentBbox.maxLat}`;
+              filters.in_bbox = [{ label: bbox, value: bbox }];
+
+            } else {
+              // Fallback or error case
+              console.error("Could not determine bbox or geometry for OSMCha link from:", state.currentBbox);
+              // Add a default invalid bbox to avoid breaking the URL structure completely
+              filters.in_bbox = [{ label: "0,0,0,0", value: "0,0,0,0" }];
+            }
+
+            // Encode the filters object for the URL
+            const encodedFilters = encodeURIComponent(JSON.stringify(filters));
+            osmchaLink.href = `https://osmcha.org/?filters=${encodedFilters}`;
             osmchaLink.innerHTML = `<span title="View in OSMCha">📊</span>`;
             osmchaLink.target = "_blank";
             osmchaLink.rel = "noopener noreferrer";
