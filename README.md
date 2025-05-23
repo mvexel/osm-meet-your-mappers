@@ -9,14 +9,6 @@ See my [profile](https://sr.ht/~mvexel/) for links to discussions and tickets.
 
 A web site and API that lets mappers find their local mapping friends.
 
----
-
-## Community and Help
-
-If you encounter a problem with this software, feel free to [open a new ticket](https://todo.sr.ht/~mvexel/meetyourmappers) to discuss.
-
-[I am on Mastodon](https://en.osm.town/@mvexel) and I almost always reply to messages I get there.
-
 ## 1. Prerequisites
 
 1. **Clone or download this repository.**
