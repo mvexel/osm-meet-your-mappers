@@ -1,9 +1,5 @@
 # Meet Your Mappers
 
-## We are on Codeberg
-> If you are reading this notice on Github, please point your bookmarks and git remotes at the `meetyourmappers` repo [on Codeberg](https://codeberg.org/mvexel/meetyourmappers) instead. This project will not be updated on Github.
----
-
 A web site and API that lets mappers find their local mapping friends.
 
 ## 1. Prerequisites
