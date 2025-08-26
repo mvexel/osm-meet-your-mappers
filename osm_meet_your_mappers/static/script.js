@@ -603,6 +603,67 @@ function initializeMap() {
     attribution: "&copy; OpenStreetMap contributors",
   }).addTo(map);
 
+  // Add custom geolocation control
+  const GeolocationControl = L.Control.extend({
+    options: {
+      position: 'topleft'
+    },
+    onAdd: function(map) {
+      const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+      const button = L.DomUtil.create('a', '', container);
+      button.innerHTML = '⊙';
+      button.href = '#';
+      button.title = 'Go to current location';
+      button.setAttribute('role', 'button');
+      button.setAttribute('aria-label', 'Go to current location');
+      button.style.fontSize = '18px';
+      button.style.lineHeight = '30px';
+      button.style.textAlign = 'center';
+      button.style.width = '30px';
+      button.style.height = '30px';
+      button.style.display = 'block';
+      button.style.textDecoration = 'none';
+      button.style.color = '#333';
+      
+      L.DomEvent.on(button, 'click', function(e) {
+        L.DomEvent.preventDefault(e);
+        if (navigator.geolocation) {
+          updateStatus('Getting your location...');
+          navigator.geolocation.getCurrentPosition(
+            function(position) {
+              const lat = position.coords.latitude;
+              const lng = position.coords.longitude;
+              map.setView([lat, lng], 13);
+              updateStatus('Location found!');
+            },
+            function(error) {
+              let message = 'Location access denied or unavailable.';
+              if (error.code === error.PERMISSION_DENIED) {
+                message = 'Location access denied. Please enable location services.';
+              } else if (error.code === error.POSITION_UNAVAILABLE) {
+                message = 'Location unavailable. Please try again.';
+              } else if (error.code === error.TIMEOUT) {
+                message = 'Location request timed out. Please try again.';
+              }
+              updateStatus(message);
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 300000
+            }
+          );
+        } else {
+          updateStatus('Geolocation is not supported by this browser.');
+        }
+      });
+      
+      return container;
+    }
+  });
+  
+  map.addControl(new GeolocationControl());
+
   // group to hold box
   drawnItems = new L.FeatureGroup();
   map.addLayer(drawnItems);
