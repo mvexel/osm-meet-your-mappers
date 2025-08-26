@@ -11,6 +11,4 @@ __version__ = get_version("meet-your-mappers")
 __all__ = [
     "app",
     "get_db_connection",
-    "Changeset",
-    "Metadata",
 ]
