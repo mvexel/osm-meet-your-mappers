@@ -2,12 +2,10 @@
 
 A web site and API that lets mappers find their local mapping friends.
 
----
-
 ## 1. Prerequisites
 
-1. **Clone or download this repository.**  
-2. **Copy `.env.example` to `.env`.**  
+1. **Clone or download this repository.**
+2. **Copy `.env.example` to `.env`.**
    - Update the values in `.env`:
      - `PG_DATA_HOST_PATH` must point to a directory with **at least 100GB** of free space (for Postgres data).
      - `LOADER_CHANGESET_FILE` must point to the downloaded changesets archive (`.osm.bz2`).
@@ -31,7 +29,7 @@ A web site and API that lets mappers find their local mapping friends.
    ```bash
    docker compose --profile initialization up -d
    ```
-   
+
 2. This performs the following:
    1. Creates the database (and schema).
    2. Loads changeset metadata from your archive up to `RETENTION_DAYS` in the past.
@@ -50,9 +48,9 @@ A web site and API that lets mappers find their local mapping friends.
    ```
 
 2. This runs:
-   - **`db`**: A PostGIS database (using a multi-arch PostGIS Dockerfile).  
-   - **`backfill`**: Keeps the database up-to-date with minutely replication files from OSM.  
-   - **`api`**: Exposes the FastAPI application and static site on port `8000`.  
+   - **`db`**: A PostGIS database (using a multi-arch PostGIS Dockerfile).
+   - **`backfill`**: Keeps the database up-to-date with minutely replication files from OSM.
+   - **`api`**: Exposes the FastAPI application and static site on port `8000`.
 
 3. If you want the site publicly accessible, put a reverse proxy (e.g., Caddy, nginx) in front of `0.0.0.0:8000`.
 
@@ -77,9 +75,9 @@ A web site and API that lets mappers find their local mapping friends.
 
 Below are some critical settings you might need to tweak in `.env`:
 
-- **`PG_DATA_HOST_PATH`**: Host directory mapped for Postgres data; must have ample disk space.  
-- **`LOADER_CHANGESET_FILE`**: Path to the `.osm.bz2` changeset archive file.  
-- **`OSM_CLIENT_ID` / `OSM_CLIENT_SECRET`**: OSM OAuth credentials.  
-- **`RETENTION_DAYS`**: How many days in the past to load from changesets.  
-- **`START_SEQUENCE`**: Which replication sequence to start from (for historical backfill).  
-- **`MIN_CHANGESETS`**, **`MAX_BBOX_FOR_LOCAL`**, etc.: Adjusts how user activity is filtered.  
+- **`PG_DATA_HOST_PATH`**: Host directory mapped for Postgres data; must have ample disk space.
+- **`LOADER_CHANGESET_FILE`**: Path to the `.osm.bz2` changeset archive file.
+- **`OSM_CLIENT_ID` / `OSM_CLIENT_SECRET`**: OSM OAuth credentials.
+- **`RETENTION_DAYS`**: How many days in the past to load from changesets.
+- **`START_SEQUENCE`**: Which replication sequence to start from (for historical backfill).
+- **`MIN_CHANGESETS`**, **`MAX_BBOX_FOR_LOCAL`**, etc.: Adjusts how user activity is filtered.

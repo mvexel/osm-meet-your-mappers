@@ -20,6 +20,7 @@ services:
     profiles:
       - initialization
       - production
+      - dev
 
   api:
     build:
@@ -38,6 +39,26 @@ services:
       - PYTHONPATH=/app
     profiles:
       - production
+
+  api-dev:
+    build:
+      context: .
+      target: api # Assuming the same build target works, adjust if needed
+    volumes:
+      - .:/app
+      - ./osm_meet_your_mappers/static:/app/osm_meet_your_mappers/static
+    ports:
+      - "8000:8000" # Same port as production api, ensure only one runs at a time
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - PYTHONPATH=/app
+    # Use uvicorn with --reload for development hot-reloading
+    command: ["uvicorn", "osm_meet_your_mappers.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    profiles:
+      - dev
 
   backfill:
     build:
