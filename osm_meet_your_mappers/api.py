@@ -23,30 +23,36 @@ from .db import get_db_connection
 # Load environment variables
 load_dotenv()
 
+# Check if authentication is enabled
+AUTH_ENABLED = os.getenv("AUTH_ENABLED", "true").lower() == "true"
+
 # ------------------------
 # OAuth Setup with Authlib
 # ------------------------
 
 app = FastAPI()
 
-# Add session middleware (required for storing temporary credentials)
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=os.getenv("SESSION_SECRET", "CHANGE_ME"),
-    https_only=True,  # ensures cookie is only sent over HTTPS
-    same_site="lax",  # "lax" is usually fine for OAuth
-)
+# Add session middleware (required for storing temporary credentials when auth is enabled)
+if AUTH_ENABLED:
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=os.getenv("SESSION_SECRET", "CHANGE_ME"),
+        https_only=True,  # ensures cookie is only sent over HTTPS
+        same_site="lax",  # "lax" is usually fine for OAuth
+    )
 
-# Initialize the OAuth instance
-oauth = OAuth()
-oauth.register(
-    "openstreetmap",
-    client_id=os.getenv("OSM_CLIENT_ID"),
-    client_secret=os.getenv("OSM_CLIENT_SECRET"),
-    server_metadata_url="https://www.openstreetmap.org/.well-known/openid-configuration",
-    api_base_url="https://api.openstreetmap.org/api/0.6/",
-    client_kwargs={"scope": "read_prefs"},
-)
+# Initialize the OAuth instance only if auth is enabled
+oauth = None
+if AUTH_ENABLED:
+    oauth = OAuth()
+    oauth.register(
+        "openstreetmap",
+        client_id=os.getenv("OSM_CLIENT_ID"),
+        client_secret=os.getenv("OSM_CLIENT_SECRET"),
+        server_metadata_url="https://www.openstreetmap.org/.well-known/openid-configuration",
+        api_base_url="https://api.openstreetmap.org/api/0.6/",
+        client_kwargs={"scope": "read_prefs"},
+    )
 
 # ------------------------
 # Static Files & Basic Endpoints
@@ -107,6 +113,8 @@ async def login(request: Request):
     """
     Redirect to OSM authorization
     """
+    if not AUTH_ENABLED:
+        raise HTTPException(status_code=404, detail="Authentication is disabled")
     redirect_uri = request.url_for("auth")
     # This call will store temporary credentials in the session automatically.
     return await oauth.openstreetmap.authorize_redirect(request, redirect_uri)
@@ -115,6 +123,8 @@ async def login(request: Request):
 @app.get("/auth/check")
 async def check_auth(request: Request):
     """Check if user is authenticated"""
+    if not AUTH_ENABLED:
+        return {"user": {"display_name": "Anonymous"}, "auth_enabled": False}
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -124,6 +134,8 @@ async def check_auth(request: Request):
 @app.post("/logout")
 async def logout(request: Request):
     """Log out the current user"""
+    if not AUTH_ENABLED:
+        raise HTTPException(status_code=404, detail="Authentication is disabled")
     request.session.pop("user", None)
     return {"status": "success"}
 
@@ -133,6 +145,8 @@ async def auth(request: Request):
     """
     Get the session token and retrieve user info
     """
+    if not AUTH_ENABLED:
+        raise HTTPException(status_code=404, detail="Authentication is disabled")
     token = await oauth.openstreetmap.authorize_access_token(request)
     # Await the asynchronous GET request
     resp = await oauth.openstreetmap.get("user/details.json", token=token)
@@ -156,6 +170,8 @@ def get_current_user(request: Request):
     """
     Get user details from session
     """
+    if not AUTH_ENABLED:
+        return {"user": {"display_name": "Anonymous"}, "auth_enabled": False}
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")

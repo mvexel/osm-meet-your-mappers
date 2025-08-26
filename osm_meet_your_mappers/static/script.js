@@ -934,14 +934,24 @@ function updateAuthUI() {
   const userDisplay = document.getElementById("user-display");
 
   if (state.osm) {
-    elements.auth.logInOutBtn.textContent = "Log Out";
-    elements.map.drawRectBtn.disabled = false;
-    document.getElementById("drawPolygon").disabled = false;
-    userDisplay.querySelector(".logged-in-as").textContent = "Logged in as";
-    userDisplay.querySelector(".username").textContent =
-      `@` + state.osm.user.display_name;
+    // Check if auth is disabled (anonymous mode)
+    if (state.osm.auth_enabled === false) {
+      elements.auth.logInOutBtn.style.display = "none";
+      elements.map.drawRectBtn.disabled = false;
+      document.getElementById("drawPolygon").disabled = false;
+      userDisplay.querySelector(".logged-in-as").textContent = "Anonymous mode";
+      userDisplay.querySelector(".username").textContent = "";
+    } else {
+      elements.auth.logInOutBtn.textContent = "Log Out";
+      elements.map.drawRectBtn.disabled = false;
+      document.getElementById("drawPolygon").disabled = false;
+      userDisplay.querySelector(".logged-in-as").textContent = "Logged in as";
+      userDisplay.querySelector(".username").textContent =
+        `@` + state.osm.user.display_name;
+    }
   } else {
     elements.auth.logInOutBtn.textContent = "Log In with OSM";
+    elements.auth.logInOutBtn.style.display = "block";
     elements.map.drawRectBtn.disabled = true;
     document.getElementById("drawPolygon").disabled = true;
     elements.meetMappersBtn.disabled = true;
@@ -1113,7 +1123,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   updateStatus(
     state.osm
-      ? "Welcome back! Draw an area to see its mappers."
+      ? (state.osm.auth_enabled === false 
+         ? "Anonymous mode enabled. Draw an area to see its mappers."
+         : "Welcome back! Draw an area to see its mappers.")
       : CONFIG.INITIAL_STATUS
   );
 });
