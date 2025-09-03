@@ -42,6 +42,9 @@ const elements = {
   share: {
     button: document.querySelector("#shareButton"),
   },
+  clear: {
+    button: document.querySelector("#clearButton"),
+  },
   map: {
     drawRectBtn: document.querySelector("#drawRect"),
   },
@@ -698,6 +701,8 @@ function initializeMap() {
         
       // Enable the Meet Mappers button
       elements.meetMappersBtn.disabled = false;
+      elements.share.button.disabled = false;
+      elements.clear.button.disabled = false;
       updateStatus("Polygon loaded from URL!");
     } else {
       // Handle regular bbox
@@ -722,6 +727,7 @@ function initializeMap() {
 
       // Enable the Meet Mappers button
       elements.meetMappersBtn.disabled = false;
+      elements.share.button.disabled = false;
       updateStatus("Bounding box loaded from URL!");
     }
   } else {
@@ -823,6 +829,8 @@ function initializeMap() {
       utils.updateUrlWithBbox(state.currentBbox);
 
       elements.meetMappersBtn.disabled = false;
+      elements.share.button.disabled = false;
+      elements.clear.button.disabled = false;
       if (bbox.polygon) {
         updateStatus("Polygon OK!");
       } else {
@@ -934,14 +942,26 @@ function updateAuthUI() {
   const userDisplay = document.getElementById("user-display");
 
   if (state.osm) {
-    elements.auth.logInOutBtn.textContent = "Log Out";
-    elements.map.drawRectBtn.disabled = false;
-    document.getElementById("drawPolygon").disabled = false;
-    userDisplay.querySelector(".logged-in-as").textContent = "Logged in as";
-    userDisplay.querySelector(".username").textContent =
-      `@` + state.osm.user.display_name;
+    if (state.osm.auth_enabled === false) {
+      // Authentication disabled mode
+      elements.auth.logInOutBtn.style.display = "none";
+      elements.map.drawRectBtn.disabled = false;
+      document.getElementById("drawPolygon").disabled = false;
+      userDisplay.style.display = "none";
+    } else {
+      // Normal authenticated mode
+      elements.auth.logInOutBtn.textContent = "Log Out";
+      elements.auth.logInOutBtn.style.display = "block";
+      elements.map.drawRectBtn.disabled = false;
+      document.getElementById("drawPolygon").disabled = false;
+      userDisplay.style.display = "block";
+      userDisplay.querySelector(".logged-in-as").textContent = "Logged in as";
+      userDisplay.querySelector(".username").textContent =
+        `@` + state.osm.user.display_name;
+    }
   } else {
     elements.auth.logInOutBtn.textContent = "Log In with OSM";
+    elements.auth.logInOutBtn.style.display = "block";
     elements.map.drawRectBtn.disabled = true;
     document.getElementById("drawPolygon").disabled = true;
     elements.meetMappersBtn.disabled = true;
@@ -992,7 +1012,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Setup auth event listeners
   elements.auth.logInOutBtn.addEventListener("click", async (e) => {
     e.preventDefault();
-    if (state.osm) {
+    if (state.osm && state.osm.auth_enabled !== false) {
       try {
         await fetch("/logout", {
           method: "POST",
@@ -1013,6 +1033,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.error("Logout failed:", error);
         updateStatus("Logout failed. Please try again.");
       }
+    } else if (state.osm && state.osm.auth_enabled === false) {
+      // Do nothing - auth is disabled
+      return;
     } else {
       window.location.href = "/login";
     }
@@ -1032,8 +1055,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     state.currentBbox = null;
     drawnItems.clearLayers();
     
-    // Disable share button when navigation occurs
+    // Disable share and clear buttons when navigation occurs
     elements.share.button.disabled = true;
+    elements.clear.button.disabled = true;
 
     // Check for bbox in URL
     const urlBbox = utils.getBboxFromUrl();
@@ -1059,6 +1083,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       // Enable the Meet Mappers button
       elements.meetMappersBtn.disabled = false;
+      elements.share.button.disabled = false;
+      elements.clear.button.disabled = false;
       updateStatus("Bounding box loaded from URL!");
     }
   });
@@ -1079,7 +1105,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Share button functionality
   function handleShare() {
-    if (!state.currentBbox || !state.currentData || state.currentData.length === 0) return;
+    if (!state.currentBbox) return;
     
     try {
       navigator.clipboard.writeText(window.location.href).then(() => {
@@ -1111,9 +1137,47 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Attach the share button listener
   elements.share.button.addEventListener("click", handleShare);
 
+  // Clear button functionality
+  function handleClear() {
+    // Clear state
+    state.currentBbox = null;
+    state.currentData = null;
+    state.urlUpdated = false;
+    
+    // Clear map
+    drawnItems.clearLayers();
+    
+    // Clear table and UI elements
+    elements.results.innerHTML = "";
+    elements.filter.input.value = "";
+    elements.filter.container.style.display = "none";
+    elements.export.container.style.display = "none";
+    
+    // Disable buttons
+    elements.meetMappersBtn.disabled = true;
+    elements.share.button.disabled = true;
+    elements.clear.button.disabled = true;
+    
+    // Clear URL parameters
+    const url = new URL(window.location);
+    url.searchParams.delete(CONFIG.URL_PARAM_NAMES.MIN_LAT);
+    url.searchParams.delete(CONFIG.URL_PARAM_NAMES.MIN_LON);
+    url.searchParams.delete(CONFIG.URL_PARAM_NAMES.MAX_LAT);
+    url.searchParams.delete(CONFIG.URL_PARAM_NAMES.MAX_LON);
+    url.searchParams.delete('polygon');
+    window.history.pushState({}, "", url);
+    
+    updateStatus("Cleared all selections.");
+  }
+
+  // Attach the clear button listener
+  elements.clear.button.addEventListener("click", handleClear);
+
   updateStatus(
-    state.osm
+    state.osm && state.osm.auth_enabled !== false
       ? "Welcome back! Draw an area to see its mappers."
+      : state.osm && state.osm.auth_enabled === false
+      ? "Draw an area to see its mappers."
       : CONFIG.INITIAL_STATUS
   );
 });

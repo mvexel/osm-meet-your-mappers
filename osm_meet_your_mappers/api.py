@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import List, Optional
 
 import uvicorn
-from authlib.integrations.starlette_client import OAuth
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
@@ -22,6 +21,13 @@ from .db import get_db_connection
 
 # Load environment variables
 load_dotenv()
+
+# Check if authentication is enabled
+AUTH_ENABLED = os.getenv("ENABLE_AUTH", "true").lower() == "true"
+
+# Import OAuth only if authentication is enabled
+if AUTH_ENABLED:
+    from authlib.integrations.starlette_client import OAuth
 
 # ------------------------
 # OAuth Setup with Authlib
@@ -37,16 +43,19 @@ app.add_middleware(
     same_site="lax",  # "lax" is usually fine for OAuth
 )
 
-# Initialize the OAuth instance
-oauth = OAuth()
-oauth.register(
-    "openstreetmap",
-    client_id=os.getenv("OSM_CLIENT_ID"),
-    client_secret=os.getenv("OSM_CLIENT_SECRET"),
-    server_metadata_url="https://www.openstreetmap.org/.well-known/openid-configuration",
-    api_base_url="https://api.openstreetmap.org/api/0.6/",
-    client_kwargs={"scope": "read_prefs"},
-)
+# Initialize the OAuth instance only if authentication is enabled
+if AUTH_ENABLED:
+    oauth = OAuth()
+    oauth.register(
+        "openstreetmap",
+        client_id=os.getenv("OSM_CLIENT_ID"),
+        client_secret=os.getenv("OSM_CLIENT_SECRET"),
+        server_metadata_url="https://www.openstreetmap.org/.well-known/openid-configuration",
+        api_base_url="https://api.openstreetmap.org/api/0.6/",
+        client_kwargs={"scope": "read_prefs"},
+    )
+else:
+    oauth = None
 
 # ------------------------
 # Static Files & Basic Endpoints
@@ -107,6 +116,8 @@ async def login(request: Request):
     """
     Redirect to OSM authorization
     """
+    if not AUTH_ENABLED:
+        raise HTTPException(status_code=404, detail="Authentication is disabled")
     redirect_uri = request.url_for("auth")
     # This call will store temporary credentials in the session automatically.
     return await oauth.openstreetmap.authorize_redirect(request, redirect_uri)
@@ -115,15 +126,19 @@ async def login(request: Request):
 @app.get("/auth/check")
 async def check_auth(request: Request):
     """Check if user is authenticated"""
+    if not AUTH_ENABLED:
+        return {"user": {"display_name": "Anonymous"}, "auth_enabled": False}
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return user
+    return {**user, "auth_enabled": True}
 
 
 @app.post("/logout")
 async def logout(request: Request):
     """Log out the current user"""
+    if not AUTH_ENABLED:
+        raise HTTPException(status_code=404, detail="Authentication is disabled")
     request.session.pop("user", None)
     return {"status": "success"}
 
@@ -133,6 +148,8 @@ async def auth(request: Request):
     """
     Get the session token and retrieve user info
     """
+    if not AUTH_ENABLED:
+        raise HTTPException(status_code=404, detail="Authentication is disabled")
     token = await oauth.openstreetmap.authorize_access_token(request)
     # Await the asynchronous GET request
     resp = await oauth.openstreetmap.get("user/details.json", token=token)
@@ -154,12 +171,23 @@ async def auth(request: Request):
 # ------------------------
 def get_current_user(request: Request):
     """
-    Get user details from session
+    Get user details from session (optional when AUTH_ENABLED=false)
     """
+    if not AUTH_ENABLED:
+        return {"user": {"display_name": "Anonymous"}, "auth_enabled": False}
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
+
+
+def get_current_user_optional(request: Request):
+    """
+    Get user details from session, but don't require auth when disabled
+    """
+    if not AUTH_ENABLED:
+        return {"user": {"display_name": "Anonymous"}, "auth_enabled": False}
+    return get_current_user(request)
 
 
 class ChangesetResponse(BaseModel):
@@ -213,7 +241,7 @@ async def get_changesets(
     ),
     limit: int = Query(100, description="Max number of results", ge=1, le=1000),
     offset: int = Query(0, description="Offset for pagination", ge=0),
-    current_user: dict = Depends(get_current_user),  # pylint: disable=unused-argument
+    current_user: dict = Depends(get_current_user_optional),  # pylint: disable=unused-argument
 ):
     """
     Get changesets for a user and bbox, paginated.
@@ -306,7 +334,7 @@ async def get_mappers(
     min_changesets: int = Query(
         os.getenv("MIN_CHANGESETS"), description="Minimum number of changesets", ge=1
     ),
-    current_user: dict = Depends(get_current_user),  # pylint: disable=unused-argument
+    current_user: dict = Depends(get_current_user_optional),  # pylint: disable=unused-argument
 ):
     """
     Get mappers within a bbox
