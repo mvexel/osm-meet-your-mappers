@@ -2,6 +2,12 @@
 
 A web site and API that lets mappers find their local mapping friends.
 
+If you just want to use Meet Your Mappers, head over to the [website](https://mappers.osm.lol/)! 
+
+My blog has [an article](https://mvexel.prose.sh/20250401-meetyourmappers) about Meet Your Mappers and I was recently [interviewed](https://blog.opencagedata.com/post/openstreetmap-interview-meet-your-mappers) for the OpenCage blog!
+
+![Meet Your Mapper screenshot](https://images.rtijn.org/2025/mym-screenshot.webp)
+
 ## 1. Prerequisites
 
 1. **Clone or download this repository.**
