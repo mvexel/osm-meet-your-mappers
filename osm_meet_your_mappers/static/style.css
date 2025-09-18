@@ -40,11 +40,13 @@ th.sort-desc .sort-indicator::after {
 #mapContainer {
   display: flex;
   flex-direction: column;
+  height: calc(100vh - 450px);
 }
 
 #map {
   flex: 1;
   min-height: 300px;
+  max-height: calc(100vh - 450px);
   width: 100%;
 }
 
@@ -238,13 +240,15 @@ footer a:hover {
 
 /* Responsive layout */
 @media (min-width: 768px) {
-  #map {
-    min-height: 400px;
-  }
-
   #mapContainer {
     flex-direction: row;
     gap: 2rem;
+    height: calc(100vh - 400px);
+  }
+
+  #map {
+    min-height: 400px;
+    max-height: calc(100vh - 400px);
   }
 
   .sidebar {
