@@ -18,10 +18,21 @@ CREATE TABLE IF NOT EXISTS changesets (
     comments_count INTEGER,
     tags JSONB,
     comments JSONB,
-    bbox geometry(Geometry, 4326)
+    bbox geometry(Geometry, 4326),
+    bbox_width DOUBLE PRECISION GENERATED ALWAYS AS (ST_XMax(bbox) - ST_XMin(bbox)) STORED,
+    bbox_height DOUBLE PRECISION GENERATED ALWAYS AS (ST_YMax(bbox) - ST_YMin(bbox)) STORED
 );
 
 CREATE INDEX IF NOT EXISTS idx_changesets_bbox_username ON changesets USING GIST (bbox, username);
+-- Keep threshold aligned with MAX_BBOX_FOR_LOCAL; adjust and reindex if that setting changes.
+CREATE INDEX IF NOT EXISTS idx_changesets_bbox_local ON changesets
+    USING GIST (bbox)
+    WHERE bbox_width < 0.1
+      AND bbox_height < 0.1;
+CREATE INDEX IF NOT EXISTS idx_changesets_bbox_size_small ON changesets
+    (bbox_width, bbox_height)
+    WHERE bbox_width < 0.1
+      AND bbox_height < 0.1;
 CREATE INDEX IF NOT EXISTS idx_changesets_username ON changesets using BTREE(username);
 CREATE INDEX IF NOT EXISTS idx_changesets_closed_at ON changesets using BTREE(closed_at); -- for the materialized view
 

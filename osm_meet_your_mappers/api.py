@@ -339,24 +339,28 @@ async def get_mappers(
     """
     Get mappers within a bbox
     """
+    max_bbox_for_local = float(os.getenv("MAX_BBOX_FOR_LOCAL", "0.1") or "0.1")
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
             query = """
+WITH search_geom AS (
+    SELECT CASE
+        WHEN %s IS NOT NULL THEN ST_SetSRID(ST_GeomFromText(%s), 4326)
+        ELSE ST_MakeEnvelope(%s, %s, %s, %s, 4326)
+    END AS geom
+)
 SELECT 
     username, 
     COUNT(id) AS changeset_count, 
     MIN(created_at) AS first_change, 
     MAX(created_at) AS last_change
-FROM changesets
+FROM changesets c
+CROSS JOIN search_geom sg
 WHERE
-    (ST_XMax(bbox) - ST_XMin(bbox)) < %s AND (ST_YMax(bbox) - ST_YMin(bbox)) < %s
-AND (
-    CASE
-        WHEN %s IS NOT NULL THEN ST_Intersects(bbox, ST_SetSRID(ST_GeomFromText(%s), 4326))
-        ELSE ST_Intersects(bbox, ST_MakeEnvelope(%s, %s, %s, %s, 4326))
-    END
-)
+    c.bbox_width < %s AND c.bbox_height < %s
+AND c.bbox && sg.geom
+AND ST_Intersects(c.bbox, sg.geom)
 GROUP BY username
 HAVING COUNT(id) >= %s
 ORDER BY changeset_count DESC
@@ -364,14 +368,14 @@ ORDER BY changeset_count DESC
             cur.execute(
                 query,
                 (
-                    os.getenv("MAX_BBOX_FOR_LOCAL", "0.1"),
-                    os.getenv("MAX_BBOX_FOR_LOCAL", "0.1"),
                     polygon,
                     polygon,
                     min_lon,
                     min_lat,
                     max_lon,
                     max_lat,
+                    max_bbox_for_local,
+                    max_bbox_for_local,
                     min_changesets,
                 ),
             )
