@@ -14,8 +14,7 @@ This repository deploys production changes through a GitHub Actions workflow at 
 
 2. **deploy**
    - Runs only for `main` pushes and depends on `build`.
-   - Checks out the repo to obtain `scripts/deploy.sh`.
-   - Copies `scripts/deploy.sh` to the production host via `appleboy/scp-action`.
+   - Checks out the repo, then copies `scripts/deploy.sh` to `/tmp/scripts/deploy.sh` on the production host via `appleboy/scp-action` (keeps the working tree clean for `git pull`).
    - Executes the script remotely with `appleboy/ssh-action`. The script performs a fast-forward pull of the deployment branch and issues `docker compose --profile production pull && up -d`.
    - Targets the GitHub Actions `production` environment (use this to require approvals if desired).
 
@@ -35,8 +34,8 @@ This repository deploys production changes through a GitHub Actions workflow at 
    ```
 2. **Authorize the CI key**
    - Locally: `ssh-keygen -t ed25519 -f ~/.ssh/id_ci-deploy -C "gha@osm-meet-your-mappers"`.
-   - Upload the public key (`id_ci-deploy.pub`) to `/home/deploy/.ssh/authorized_keys` and set `chmod 600 authorized_keys`.
-   - Store the matching private key in the `DEPLOY_SSH_KEY` secret.
+   - Upload the public key (`id_ci-deploy.pub`) to `/home/deploy/.ssh/authorized_keys`, `chown deploy:deploy`, and `chmod 600`.
+   - Store the matching private key in the `DEPLOY_SSH_KEY` repository secret.
 3. **Clone the repository for the deploy user**
    ```bash
    sudo mkdir -p /srv/osm-meet-your-mappers
@@ -59,7 +58,7 @@ The script expects two environment variables:
 - `DEPLOY_DIR`: directory containing the Git checkout on the host.
 - `DEPLOY_BRANCH` (optional, defaults to `main`): branch to deploy.
 
-It performs `git fetch`, switches to the branch, pulls fast-forward only, then runs:
+It removes any untracked `scripts/deploy.sh` dropped by CI, performs a fast-forward-only update of the deployment branch, then runs:
 ```bash
 docker compose --profile production pull
 docker compose --profile production up -d

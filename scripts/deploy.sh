@@ -9,6 +9,12 @@ fi
 
 cd "${DEPLOY_DIR}"
 
+if [[ -f scripts/deploy.sh ]]; then
+  if ! git ls-files --error-unmatch scripts/deploy.sh >/dev/null 2>&1; then
+    rm -f scripts/deploy.sh
+  fi
+fi
+
 git fetch --prune
 git checkout "${DEPLOY_BRANCH:-main}"
 git pull --ff-only origin "${DEPLOY_BRANCH:-main}"

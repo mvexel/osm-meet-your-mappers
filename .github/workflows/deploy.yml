@@ -61,7 +61,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: scripts/deploy.sh
-          target: ${{ secrets.DEPLOY_DIR }}
+          target: /tmp
 
       - name: Run deploy
         uses: appleboy/ssh-action@v1.1.0
@@ -71,7 +71,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -euo pipefail
-            chmod +x "${{ secrets.DEPLOY_DIR }}/scripts/deploy.sh"
+            chmod +x /tmp/scripts/deploy.sh
             export DEPLOY_DIR="${{ secrets.DEPLOY_DIR }}"
             export DEPLOY_BRANCH="${{ env.DEPLOY_BRANCH }}"
-            bash "${{ secrets.DEPLOY_DIR }}/scripts/deploy.sh"
+            bash /tmp/scripts/deploy.sh
