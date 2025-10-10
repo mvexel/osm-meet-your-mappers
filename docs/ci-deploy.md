@@ -9,7 +9,8 @@ This repository deploys production changes through a GitHub Actions workflow at 
 ### Jobs
 1. **build**
    - Strategy matrix over Docker targets (`api`, `archive_loader`, `backfill`, `load_admin_boundaries`).
-   - Uses `docker/setup-buildx-action` and `docker/build-push-action` to build each target and push images tagged as `ghcr.io/<owner>/osm-meet-your-mappers:<target>`.
+   - Enables QEMU emulation (`docker/setup-qemu-action`) so Buildx can produce multi-architecture images.
+   - Uses `docker/setup-buildx-action` and `docker/build-push-action` to build each target for `linux/amd64,linux/arm64`, pushing manifest lists tagged `ghcr.io/<owner>/osm-meet-your-mappers:<target>`.
    - Requires `packages: write` permission so the default `GITHUB_TOKEN` can publish to GHCR.
 
 2. **deploy**

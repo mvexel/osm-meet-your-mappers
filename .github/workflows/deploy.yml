@@ -10,6 +10,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository }}
   DEPLOY_BRANCH: main
+  BUILD_PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
   build:
@@ -24,6 +25,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -42,6 +46,7 @@ jobs:
           target: ${{ matrix.target }}
           push: true
           tags: ${{ env.IMAGE_PREFIX }}:${{ matrix.target }}
+          platforms: ${{ env.BUILD_PLATFORMS }}
           provenance: false
 
   deploy:
