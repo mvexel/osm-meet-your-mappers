@@ -71,7 +71,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -euo pipefail
-            chmod +x "${{ secrets.DEPLOY_DIR }}/deploy.sh"
+            chmod +x "${{ secrets.DEPLOY_DIR }}/scripts/deploy.sh"
             export DEPLOY_DIR="${{ secrets.DEPLOY_DIR }}"
             export DEPLOY_BRANCH="${{ env.DEPLOY_BRANCH }}"
-            bash "${{ secrets.DEPLOY_DIR }}/deploy.sh"
+            bash "${{ secrets.DEPLOY_DIR }}/scripts/deploy.sh"
