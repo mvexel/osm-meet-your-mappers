@@ -26,6 +26,7 @@ services:
     build:
       context: .
       target: api
+    image: ${REGISTRY_IMAGE_PREFIX:-ghcr.io/mvexel/osm-meet-your-mappers}:api
     volumes:
       - .:/app
       - ./osm_meet_your_mappers/static:/app/osm_meet_your_mappers/static
@@ -44,6 +45,7 @@ services:
     build:
       context: .
       target: api # Assuming the same build target works, adjust if needed
+    image: ${REGISTRY_IMAGE_PREFIX:-ghcr.io/mvexel/osm-meet-your-mappers}:api
     volumes:
       - .:/app
       - ./osm_meet_your_mappers/static:/app/osm_meet_your_mappers/static
@@ -64,6 +66,7 @@ services:
     build:
       context: .
       target: backfill
+    image: ${REGISTRY_IMAGE_PREFIX:-ghcr.io/mvexel/osm-meet-your-mappers}:backfill
     working_dir: /app
     volumes:
       - .:/app
@@ -80,6 +83,7 @@ services:
     build:
       context: .
       target: load_admin_boundaries
+    image: ${REGISTRY_IMAGE_PREFIX:-ghcr.io/mvexel/osm-meet-your-mappers}:load_admin_boundaries
     working_dir: /app
     volumes:
       - .:/app
@@ -97,6 +101,7 @@ services:
     build:
       context: .
       target: archive_loader
+    image: ${REGISTRY_IMAGE_PREFIX:-ghcr.io/mvexel/osm-meet-your-mappers}:archive_loader
     working_dir: /app
     volumes:
       - .:/app
