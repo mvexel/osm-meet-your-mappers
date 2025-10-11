@@ -14,6 +14,29 @@
 
 <body>
     <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <!-- Welcome overlay for first-time users -->
+    <div id="welcome-overlay" class="welcome-overlay hidden" role="dialog" aria-labelledby="welcome-title" aria-modal="true">
+        <div class="welcome-content">
+            <h2 id="welcome-title">Welcome to Meet Your Mappers! 👋</h2>
+            <p>Find active OpenStreetMap mappers in any area you're interested in.</p>
+
+            <ul class="welcome-steps">
+                <li data-step="1"><strong>Navigate the map</strong> to your area of interest</li>
+                <li data-step="2"><strong>Click "Draw Rectangle"</strong> or "Draw Polygon" to select an area</li>
+                <li data-step="3"><strong>Draw your selection</strong> on the map (max 1° × 1°)</li>
+                <li data-step="4"><strong>Click "Meet My Mappers"</strong> to find mappers</li>
+            </ul>
+
+            <p><small>💡 Tip: Use the filter to search by username, or export results to CSV!</small></p>
+
+            <div class="welcome-buttons">
+                <button id="welcome-dismiss" class="secondary">Don't show again</button>
+                <button id="welcome-close">Got it!</button>
+            </div>
+        </div>
+    </div>
+
     <main class="container" id="main-content">
         <section class="pico">
             <div class="header-row">
@@ -42,15 +65,15 @@
                 <aside class="sidebar" aria-label="Map controls">
                     <div class="button-group">
                         <div class="button-row">
-                            <button id="logInOut" class='secondary' aria-label="Log in or out of OpenStreetMap">Log In with
+                            <button id="logInOut" class="secondary" aria-label="Log in or out of OpenStreetMap">Log In with
                                 OSM</button>
-                            <button id="drawRect" disabled aria-label="Draw a rectangle on the map">Draw Rectangle</button>
-                            <button id="drawPolygon" disabled aria-label="Draw a polygon on the map">Draw Polygon</button>
-                            <button id="meetMappers" disabled aria-label="Find mappers in the selected area">Meet My
+                            <button id="drawRect" class="is-disabled" aria-disabled="true" aria-label="Draw a rectangle on the map">Draw Rectangle</button>
+                            <button id="drawPolygon" class="is-disabled" aria-disabled="true" aria-label="Draw a polygon on the map">Draw Polygon</button>
+                            <button id="meetMappers" class="is-disabled" aria-disabled="true" aria-label="Find mappers in the selected area">Meet My
                                 Mappers</button>
-                            <button id="shareButton" class="share-button secondary" disabled aria-label="Copy shareable link to clipboard">Copy
+                            <button id="shareButton" class="share-button secondary is-disabled" aria-disabled="true" aria-label="Copy shareable link to clipboard">Copy
                                 URL</button>
-                            <button id="clearButton" class="clear-button secondary" disabled aria-label="Clear all selections and reset">Clear</button>
+                            <button id="clearButton" class="clear-button secondary is-disabled" aria-disabled="true" aria-label="Clear all selections and reset">Clear</button>
                         </div>
                     </div>
 

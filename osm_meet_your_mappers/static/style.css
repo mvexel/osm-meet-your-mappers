@@ -57,32 +57,95 @@ th.sort-desc .sort-indicator::after {
   gap: 1rem;
   margin-top: 1rem;
   width: 100%;
+  overflow: visible;
 }
 
 .button-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  overflow: visible;
 }
 
 .button-row {
   display: flex;
   gap: 0.5rem;
   justify-content: center;
+  overflow: visible;
 }
 
 .button-row button {
   flex: 1;
   transition: all 0.2s ease;
+  position: relative;
 }
 
-.button-row button:hover {
+.button-row button.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.button-row button:hover:not(.is-disabled) {
   transform: scale(1.05);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
-.button-row button:active {
+.button-row button:active:not(.is-disabled) {
   transform: scale(0.95);
+}
+
+/* Button hint tooltips */
+.button-row button[data-hint] {
+  cursor: help;
+}
+
+/* Show tooltip on any button with data-hint when hovered (disabled or not) */
+.button-row button[data-hint]::after {
+  content: attr(data-hint);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: normal;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  z-index: 10000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* Arrow pointing down */
+.button-row button[data-hint]::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #333;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  z-index: 10000;
+}
+
+.button-row button[data-hint]:hover::after,
+.button-row button[data-hint]:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Visual indicator for disabled buttons with hints */
+.button-row button.is-disabled[data-hint] {
+  cursor: help;
 }
 
 /* User display */
@@ -107,20 +170,56 @@ th.sort-desc .sort-indicator::after {
   color: #00576b; /* Darker color for better contrast */
   text-align: center;
   transition: all 0.3s ease;
+  min-height: 3.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.status-message .status-main {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.status-message .status-next {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: normal;
+  opacity: 0.85;
+  margin-top: 0.25rem;
+}
+
+.status-message.status-success {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-message.status-error {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.status-message.status-warning {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.status-message.status-info {
+  background-color: #e0f7fa;
+  color: #00576b;
 }
 
 @keyframes flashAnim {
   0% {
     background-color: #ffeb3b;
-    transform: scale(1.05);
   }
   50% {
     background-color: #fffde7;
-    transform: scale(1);
   }
   100% {
     background-color: #e0f7fa;
-    transform: scale(1);
   }
 }
 
@@ -304,4 +403,95 @@ input:focus-visible {
 
 .skip-link:focus {
   top: 0;
+}
+
+/* First-time user overlay */
+.welcome-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease;
+}
+
+.welcome-overlay.hidden {
+  display: none;
+}
+
+.welcome-content {
+  background: white;
+  border-radius: 8px;
+  padding: 2rem;
+  max-width: 500px;
+  margin: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+}
+
+.welcome-content h2 {
+  margin-top: 0;
+  color: var(--primary);
+}
+
+.welcome-steps {
+  margin: 1.5rem 0;
+  list-style: none;
+  padding: 0;
+}
+
+.welcome-steps li {
+  padding: 0.75rem 0;
+  padding-left: 2rem;
+  position: relative;
+  border-left: 3px solid #e0f7fa;
+  margin-bottom: 0.5rem;
+}
+
+.welcome-steps li::before {
+  content: attr(data-step);
+  position: absolute;
+  left: -1.5rem;
+  top: 0.5rem;
+  background: var(--primary);
+  color: white;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.875rem;
+}
+
+.welcome-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.welcome-buttons button {
+  flex: 1;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }

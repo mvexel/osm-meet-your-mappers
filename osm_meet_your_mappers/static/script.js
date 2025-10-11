@@ -20,6 +20,8 @@ const state = {
   currentData: null,
   osm: null,
   urlUpdated: false, // Track if URL was updated to prevent loops
+  hasVisibleResults: false,
+  isLoading: false,
 };
 
 // ================================
@@ -47,11 +49,171 @@ const elements = {
   },
   map: {
     drawRectBtn: document.querySelector("#drawRect"),
+    drawPolygonBtn: document.querySelector("#drawPolygon"),
   },
   auth: {
     logInOutBtn: document.querySelector("#logInOut"),
   },
 };
+
+// ================================
+// Button State Controller
+// ================================
+
+class ButtonStateController {
+  constructor(descriptors) {
+    this.activationKeys = new Set(["Enter", " ", "Spacebar", "Space"]);
+    this.descriptors = descriptors
+      .filter((descriptor) => descriptor?.element)
+      .map((descriptor) => ({
+        ...descriptor,
+        element: descriptor.element,
+      }));
+    this.guardedButtons = new WeakSet();
+    this.descriptors.forEach(({ element }) => this.decorate(element));
+  }
+
+  decorate(element) {
+    if (!element || this.guardedButtons.has(element)) return;
+
+    element.removeAttribute("disabled");
+
+    const guard = (event) => {
+      if (!this.isDisabled(element)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+
+    element.addEventListener("click", guard, true);
+    element.addEventListener(
+      "keydown",
+      (event) => {
+        if (!this.activationKeys.has(event.key)) return;
+        guard(event);
+      },
+      true
+    );
+    element.addEventListener(
+      "keyup",
+      (event) => {
+        if (!this.activationKeys.has(event.key)) return;
+        guard(event);
+      },
+      true
+    );
+
+    this.guardedButtons.add(element);
+  }
+
+  isDisabled(element) {
+    return element.classList.contains("is-disabled");
+  }
+
+  setDisabled(element, disabled) {
+    if (!element) return;
+    element.classList.toggle("is-disabled", disabled);
+    if (disabled) {
+      element.setAttribute("aria-disabled", "true");
+      element.setAttribute("tabindex", "-1");
+    } else {
+      element.removeAttribute("aria-disabled");
+      element.removeAttribute("tabindex");
+    }
+  }
+
+  setHint(element, hint) {
+    if (!element) return;
+    if (hint) {
+      element.setAttribute("data-hint", hint);
+      element.setAttribute("title", hint);
+    } else {
+      element.removeAttribute("data-hint");
+      element.removeAttribute("title");
+    }
+  }
+
+  refresh(appState) {
+    this.descriptors.forEach((descriptor) => {
+      const { element, compute } = descriptor;
+      if (!element) return;
+
+      const { enabled = false, hint = null } = compute(appState) || {};
+      this.setDisabled(element, !enabled);
+      this.setHint(element, hint);
+
+      if (typeof descriptor.afterUpdate === "function") {
+        descriptor.afterUpdate(element, { enabled, hint }, appState);
+      }
+    });
+  }
+}
+
+const computeDrawButtonState = (appState) => {
+  if (appState.currentBbox) {
+    return { enabled: false, hint: "Clear current selection first" };
+  }
+  if (appState.osm) {
+    return { enabled: true, hint: null };
+  }
+  return { enabled: false, hint: "Log in first to draw" };
+};
+
+const buttonController = new ButtonStateController([
+  {
+    element: elements.map.drawRectBtn,
+    compute: computeDrawButtonState,
+  },
+  {
+    element: elements.map.drawPolygonBtn,
+    compute: computeDrawButtonState,
+  },
+  {
+    element: elements.meetMappersBtn,
+    compute: (appState) => {
+      if (appState.isLoading) {
+        return { enabled: false, hint: "Fetching mapper data..." };
+      }
+      if (appState.currentBbox) {
+        return { enabled: true, hint: null };
+      }
+      return { enabled: false, hint: "Draw an area first" };
+    },
+  },
+  {
+    element: elements.share.button,
+    compute: (appState) => {
+      if (appState.hasVisibleResults) {
+        return { enabled: true, hint: null };
+      }
+      if (appState.currentBbox) {
+        return { enabled: false, hint: 'Click "Meet My Mappers" first' };
+      }
+      return { enabled: false, hint: "Draw an area and find mappers first" };
+    },
+  },
+  {
+    element: elements.clear.button,
+    compute: (appState) => {
+      if (appState.currentData && appState.currentData.length > 0) {
+        return { enabled: true, hint: null };
+      }
+      if (appState.currentBbox) {
+        return { enabled: true, hint: "Clear current selection" };
+      }
+      return { enabled: false, hint: "No selection to clear" };
+    },
+  },
+]);
+
+buttonController.refresh(state);
+
+// ================================
+// Button Hint Management
+// ================================
+
+function updateButtonHints() {
+  buttonController.refresh(state);
+}
 
 // ================================
 // Utility Functions
@@ -219,11 +381,29 @@ function friendlyDate(utcInput) {
   }
 }
 
-function updateStatus(message) {
-  elements.status.textContent = message;
+function updateStatus(message, nextAction = null, type = 'info') {
+  // Clear existing classes
+  elements.status.classList.remove("status-success", "status-error", "status-warning", "status-info");
+
+  // Add type class
+  elements.status.classList.add(`status-${type}`);
+
+  // Build the status HTML
+  if (nextAction) {
+    elements.status.innerHTML = `
+      <span class="status-main">${message}</span>
+      <span class="status-next">Next: ${nextAction}</span>
+    `;
+  } else {
+    elements.status.innerHTML = `<span class="status-main">${message}</span>`;
+  }
+
   elements.status.classList.add("flash");
   setTimeout(() => elements.status.classList.remove("flash"), 1000);
-  announce(message); // Announce the status message
+
+  // Announce the full message
+  const fullMessage = nextAction ? `${message}. Next: ${nextAction}` : message;
+  announce(fullMessage);
 }
 
 // ================================
@@ -232,14 +412,18 @@ function updateStatus(message) {
 
 const ui = {
   showLoader: () => {
-    elements.meetMappersBtn.disabled = true;
+    state.isLoading = true;
+    updateButtonHints();
     elements.progress.style.visibility = "visible";
     elements.progress.setAttribute("aria-hidden", "false");
+    // Don't use updateStatus here to avoid overwriting with structured format
     elements.status.innerHTML = '<span class="loader"></span> Loading data...';
+    elements.status.classList.add(`status-info`);
   },
 
   hideLoader: () => {
-    elements.meetMappersBtn.disabled = false;
+    state.isLoading = false;
+    updateButtonHints();
     elements.progress.style.visibility = "hidden";
     elements.progress.setAttribute("aria-hidden", "true");
   },
@@ -282,10 +466,8 @@ const dataHandler = {
     }
     
     const hasData = data.length > 0;
+    state.hasVisibleResults = hasData;
     elements.export.container.style.display = hasData ? "block" : "none";
-    
-    // Enable/disable share button based on data
-    elements.share.button.disabled = !hasData;
 
     // Show the filter container
     elements.filter.container.style.display = hasData ? "block" : "none";
@@ -493,6 +675,8 @@ const dataHandler = {
         row.style.display = username.includes(searchTerm) ? "" : "none";
       });
     }
+
+    updateButtonHints();
   },
 
   sortTable(table, columnIndex, dataType, forceDescending = false) {
@@ -699,11 +883,12 @@ function initializeMap() {
       // Zoom to polygon bounds
       map.fitBounds(layer.getBounds());
         
-      // Enable the Meet Mappers button
-      elements.meetMappersBtn.disabled = false;
-      elements.share.button.disabled = false;
-      elements.clear.button.disabled = false;
-      updateStatus("Polygon loaded from URL!");
+      updateStatus(
+        "✓ Polygon loaded from URL!",
+        'Click "Meet My Mappers" to find mappers in this area',
+        'success'
+      );
+      updateButtonHints();
     } else {
       // Handle regular bbox
       const bounds = L.latLngBounds(
@@ -725,10 +910,12 @@ function initializeMap() {
       // Zoom to the bbox
       map.fitBounds(bounds);
 
-      // Enable the Meet Mappers button
-      elements.meetMappersBtn.disabled = false;
-      elements.share.button.disabled = false;
-      updateStatus("Bounding box loaded from URL!");
+      updateStatus(
+        "✓ Area loaded from URL!",
+        'Click "Meet My Mappers" to find mappers in this area',
+        'success'
+      );
+      updateButtonHints();
     }
   } else {
     // Attempt geolocate if no bbox in URL
@@ -790,7 +977,11 @@ function initializeMap() {
       ) {
         state.currentBbox = null;
         drawnItems.clearLayers();
-        updateStatus("Area is too large, try something smaller.");
+        updateStatus(
+          `Area is too large (max ${CONFIG.MAX_BOX_DEGREES}° × ${CONFIG.MAX_BOX_DEGREES}°)`,
+          'Draw a smaller rectangle',
+          'error'
+        );
         return;
       }
       bbox = {
@@ -809,7 +1000,11 @@ function initializeMap() {
       ) {
         state.currentBbox = null;
         drawnItems.clearLayers();
-        updateStatus("Area is too large, try something smaller.");
+        updateStatus(
+          `Area is too large (max ${CONFIG.MAX_BOX_DEGREES}° × ${CONFIG.MAX_BOX_DEGREES}°)`,
+          'Draw a smaller rectangle',
+          'error'
+        );
         return;
       }
       // Convert polygon to WKT format
@@ -828,14 +1023,26 @@ function initializeMap() {
       // Update URL with the new bbox
       utils.updateUrlWithBbox(state.currentBbox);
 
-      elements.meetMappersBtn.disabled = false;
-      elements.share.button.disabled = false;
-      elements.clear.button.disabled = false;
+      // Calculate area size for feedback
+      const latDiff = Math.abs(bbox.maxLat - bbox.minLat).toFixed(2);
+      const lonDiff = Math.abs(bbox.maxLon - bbox.minLon).toFixed(2);
+
       if (bbox.polygon) {
-        updateStatus("Polygon OK!");
+        updateStatus(
+          `✓ Polygon selected!`,
+          'Click "Meet My Mappers" to find mappers in this area',
+          'success'
+        );
       } else {
-        updateStatus("Bounding box OK!");
+        updateStatus(
+          `✓ Area selected! (${lonDiff}° × ${latDiff}°)`,
+          'Click "Meet My Mappers" to find mappers in this area',
+          'success'
+        );
       }
+
+      // Update button hints
+      updateButtonHints();
     }
   });
 }
@@ -853,6 +1060,11 @@ function initializeSidebarButtons() {
       drawPolygon.disable();
     }
     drawRectangle.enable();
+    updateStatus(
+      "🖱️ Drawing rectangle...",
+      `Click and drag to select an area (max ${CONFIG.MAX_BOX_DEGREES}° × ${CONFIG.MAX_BOX_DEGREES}°)`,
+      'info'
+    );
   });
 
   // Polygon draw handler
@@ -864,6 +1076,11 @@ function initializeSidebarButtons() {
       drawRectangle.disable();
     }
     drawPolygon.enable();
+    updateStatus(
+      "🖱️ Drawing polygon...",
+      `Click to add points, double-click to finish (max ${CONFIG.MAX_BOX_DEGREES}° × ${CONFIG.MAX_BOX_DEGREES}°)`,
+      'info'
+    );
   });
 }
 
@@ -873,7 +1090,11 @@ function initializeSidebarButtons() {
 
 async function handleMeetMappers() {
   if (!state.currentBbox) {
-    updateStatus("Please draw a rectangle on the map to select an area.");
+    updateStatus(
+      "No area selected",
+      'Click "Draw Rectangle" to select an area first',
+      'warning'
+    );
     return;
   }
 
@@ -882,11 +1103,26 @@ async function handleMeetMappers() {
 
   try {
     const data = await dataHandler.fetchMappers(state.currentBbox);
-    updateStatus(`Success! Found ${data.length} mappers.`);
+    if (data.length > 0) {
+      updateStatus(
+        `✓ Found ${data.length} mapper${data.length === 1 ? '' : 's'}!`,
+        'Use the filter to search by username, or export to CSV',
+        'success'
+      );
+    } else {
+      updateStatus(
+        'No mappers found in this area',
+        'Try expanding your selection or choosing a different area',
+        'warning'
+      );
+    }
     dataHandler.displayMappers(data);
+
+    // Update button hints after displaying results
+    updateButtonHints();
   } catch (error) {
     console.error("Error:", error);
-    updateStatus(`Error: ${error.message}`);
+    updateStatus(`Error: ${error.message}`, 'Please try again or draw a different area', 'error');
   } finally {
     ui.hideLoader();
   }
@@ -945,15 +1181,11 @@ function updateAuthUI() {
     if (state.osm.auth_enabled === false) {
       // Authentication disabled mode
       elements.auth.logInOutBtn.style.display = "none";
-      elements.map.drawRectBtn.disabled = false;
-      document.getElementById("drawPolygon").disabled = false;
       userDisplay.style.display = "none";
     } else {
       // Normal authenticated mode
       elements.auth.logInOutBtn.textContent = "Log Out";
       elements.auth.logInOutBtn.style.display = "block";
-      elements.map.drawRectBtn.disabled = false;
-      document.getElementById("drawPolygon").disabled = false;
       userDisplay.style.display = "block";
       userDisplay.querySelector(".logged-in-as").textContent = "Logged in as";
       userDisplay.querySelector(".username").textContent =
@@ -962,12 +1194,58 @@ function updateAuthUI() {
   } else {
     elements.auth.logInOutBtn.textContent = "Log In with OSM";
     elements.auth.logInOutBtn.style.display = "block";
-    elements.map.drawRectBtn.disabled = true;
-    document.getElementById("drawPolygon").disabled = true;
-    elements.meetMappersBtn.disabled = true;
     userDisplay.querySelector(".logged-in-as").textContent = "Not logged in";
     userDisplay.querySelector(".username").textContent = "";
   }
+
+  // Update button hints after auth state changes
+  updateButtonHints();
+}
+
+// ================================
+// Welcome Overlay for First-time Users
+// ================================
+
+function initWelcomeOverlay() {
+  const overlay = document.getElementById('welcome-overlay');
+  const closeBtn = document.getElementById('welcome-close');
+  const dismissBtn = document.getElementById('welcome-dismiss');
+
+  // Check if user has seen the welcome overlay before
+  const hasSeenWelcome = localStorage.getItem('mym-welcome-seen');
+
+  if (!hasSeenWelcome) {
+    // Show overlay after a short delay
+    setTimeout(() => {
+      overlay.classList.remove('hidden');
+      overlay.focus();
+    }, 500);
+  }
+
+  // Close button - just close, will show again on next visit
+  closeBtn.addEventListener('click', () => {
+    overlay.classList.add('hidden');
+  });
+
+  // Dismiss button - don't show again
+  dismissBtn.addEventListener('click', () => {
+    localStorage.setItem('mym-welcome-seen', 'true');
+    overlay.classList.add('hidden');
+  });
+
+  // Close on escape key
+  overlay.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      overlay.classList.add('hidden');
+    }
+  });
+
+  // Close on backdrop click
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.classList.add('hidden');
+    }
+  });
 }
 
 // ================================
@@ -975,6 +1253,8 @@ function updateAuthUI() {
 // ================================
 
 document.addEventListener("DOMContentLoaded", async () => {
+  // Initialize welcome overlay
+  initWelcomeOverlay();
   // Set up filter functionality
   elements.filter.input.addEventListener("input", (e) => {
     setupAccessibilityAnnouncements();
@@ -1009,6 +1289,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkAuth();
   updateAuthUI();
 
+  // Initialize button hints
+  updateButtonHints();
+
   // Setup auth event listeners
   elements.auth.logInOutBtn.addEventListener("click", async (e) => {
     e.preventDefault();
@@ -1024,14 +1307,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         elements.results.innerHTML = "";
         elements.filter.container.style.display = "none";
         elements.export.container.style.display = "none";
-        elements.share.button.disabled = true;
         state.currentData = null;
+        state.hasVisibleResults = false;
         
         updateAuthUI();
-        updateStatus("Successfully logged out");
+        updateStatus("Successfully logged out", null, 'info');
       } catch (error) {
         console.error("Logout failed:", error);
-        updateStatus("Logout failed. Please try again.");
+        updateStatus("Logout failed", "Please try again", 'error');
       }
     } else if (state.osm && state.osm.auth_enabled === false) {
       // Do nothing - auth is disabled
@@ -1053,11 +1336,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.addEventListener("popstate", () => {
     // Clear current bbox and drawn items
     state.currentBbox = null;
+    state.currentData = null;
+    state.hasVisibleResults = false;
     drawnItems.clearLayers();
     
-    // Disable share and clear buttons when navigation occurs
-    elements.share.button.disabled = true;
-    elements.clear.button.disabled = true;
+    updateButtonHints();
 
     // Check for bbox in URL
     const urlBbox = utils.getBboxFromUrl();
@@ -1081,11 +1364,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Zoom to the bbox
       map.fitBounds(bounds);
 
-      // Enable the Meet Mappers button
-      elements.meetMappersBtn.disabled = false;
-      elements.share.button.disabled = false;
-      elements.clear.button.disabled = false;
-      updateStatus("Bounding box loaded from URL!");
+      updateStatus(
+        "✓ Area loaded from URL!",
+        'Click "Meet My Mappers" to find mappers in this area',
+        'success'
+      );
+      updateButtonHints();
     }
   });
 
@@ -1143,6 +1427,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     state.currentBbox = null;
     state.currentData = null;
     state.urlUpdated = false;
+    state.hasVisibleResults = false;
     
     // Clear map
     drawnItems.clearLayers();
@@ -1153,11 +1438,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     elements.filter.container.style.display = "none";
     elements.export.container.style.display = "none";
     
-    // Disable buttons
-    elements.meetMappersBtn.disabled = true;
-    elements.share.button.disabled = true;
-    elements.clear.button.disabled = true;
-    
     // Clear URL parameters
     const url = new URL(window.location);
     url.searchParams.delete(CONFIG.URL_PARAM_NAMES.MIN_LAT);
@@ -1167,17 +1447,37 @@ document.addEventListener("DOMContentLoaded", async () => {
     url.searchParams.delete('polygon');
     window.history.pushState({}, "", url);
     
-    updateStatus("Cleared all selections.");
+    updateStatus(
+      "✓ Cleared all selections",
+      'Navigate the map and draw a new area to start over',
+      'info'
+    );
+
+    // Update button hints
+    updateButtonHints();
   }
 
   // Attach the clear button listener
   elements.clear.button.addEventListener("click", handleClear);
 
-  updateStatus(
-    state.osm && state.osm.auth_enabled !== false
-      ? "Welcome back! Draw an area to see its mappers."
-      : state.osm && state.osm.auth_enabled === false
-      ? "Draw an area to see its mappers."
-      : CONFIG.INITIAL_STATUS
-  );
+  // Set initial status based on auth state
+  if (state.osm && state.osm.auth_enabled !== false) {
+    updateStatus(
+      "📍 Welcome back!",
+      'Navigate the map and click "Draw Rectangle" to select an area',
+      'info'
+    );
+  } else if (state.osm && state.osm.auth_enabled === false) {
+    updateStatus(
+      "📍 Navigate to your area of interest",
+      'Click "Draw Rectangle" to select an area and find mappers',
+      'info'
+    );
+  } else {
+    updateStatus(
+      CONFIG.INITIAL_STATUS,
+      null,
+      'info'
+    );
+  }
 });
