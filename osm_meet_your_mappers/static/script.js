@@ -1203,58 +1203,10 @@ function updateAuthUI() {
 }
 
 // ================================
-// Welcome Overlay for First-time Users
-// ================================
-
-function initWelcomeOverlay() {
-  const overlay = document.getElementById('welcome-overlay');
-  const closeBtn = document.getElementById('welcome-close');
-  const dismissBtn = document.getElementById('welcome-dismiss');
-
-  // Check if user has seen the welcome overlay before
-  const hasSeenWelcome = localStorage.getItem('mym-welcome-seen');
-
-  if (!hasSeenWelcome) {
-    // Show overlay after a short delay
-    setTimeout(() => {
-      overlay.classList.remove('hidden');
-      overlay.focus();
-    }, 500);
-  }
-
-  // Close button - just close, will show again on next visit
-  closeBtn.addEventListener('click', () => {
-    overlay.classList.add('hidden');
-  });
-
-  // Dismiss button - don't show again
-  dismissBtn.addEventListener('click', () => {
-    localStorage.setItem('mym-welcome-seen', 'true');
-    overlay.classList.add('hidden');
-  });
-
-  // Close on escape key
-  overlay.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      overlay.classList.add('hidden');
-    }
-  });
-
-  // Close on backdrop click
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) {
-      overlay.classList.add('hidden');
-    }
-  });
-}
-
-// ================================
 // Initialization on DOM Ready
 // ================================
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // Initialize welcome overlay
-  initWelcomeOverlay();
   // Set up filter functionality
   elements.filter.input.addEventListener("input", (e) => {
     setupAccessibilityAnnouncements();

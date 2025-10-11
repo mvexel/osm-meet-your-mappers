@@ -118,7 +118,7 @@ th.sort-desc .sort-indicator::after {
   visibility: hidden;
   transition: opacity 0.2s, visibility 0.2s;
   z-index: 10000;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* Arrow pointing down */
@@ -167,7 +167,8 @@ th.sort-desc .sort-indicator::after {
   border-radius: 4px;
   font-weight: bold;
   background-color: #e0f7fa;
-  color: #00576b; /* Darker color for better contrast */
+  color: #00576b;
+  /* Darker color for better contrast */
   text-align: center;
   transition: all 0.3s ease;
   min-height: 3.5rem;
@@ -215,9 +216,11 @@ th.sort-desc .sort-indicator::after {
   0% {
     background-color: #ffeb3b;
   }
+
   50% {
     background-color: #fffde7;
   }
+
   100% {
     background-color: #e0f7fa;
   }
@@ -274,7 +277,8 @@ th.sort-desc .sort-indicator::after {
 .truncation-notice {
   margin-top: 10px;
   font-style: italic;
-  color: #555; /* Darker for better contrast */
+  color: #555;
+  /* Darker for better contrast */
 }
 
 /* Toast notification for copy success */
@@ -303,6 +307,7 @@ th.sort-desc .sort-indicator::after {
     bottom: 0;
     opacity: 0;
   }
+
   to {
     bottom: 30px;
     opacity: 1;
@@ -314,6 +319,7 @@ th.sort-desc .sort-indicator::after {
     bottom: 30px;
     opacity: 1;
   }
+
   to {
     bottom: 0;
     opacity: 0;
@@ -325,7 +331,8 @@ footer {
   margin-top: 2rem;
   padding: 1rem 0;
   text-align: center;
-  color: #555; /* Slightly darker for better contrast */
+  color: #555;
+  /* Slightly darker for better contrast */
 }
 
 footer a {
@@ -405,84 +412,15 @@ input:focus-visible {
   top: 0;
 }
 
-/* First-time user overlay */
-.welcome-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  animation: fadeIn 0.3s ease;
-}
-
-.welcome-overlay.hidden {
-  display: none;
-}
-
-.welcome-content {
-  background: white;
-  border-radius: 8px;
-  padding: 2rem;
-  max-width: 500px;
-  margin: 1rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  animation: slideUp 0.3s ease;
-}
-
-.welcome-content h2 {
-  margin-top: 0;
-  color: var(--primary);
-}
-
-.welcome-steps {
-  margin: 1.5rem 0;
-  list-style: none;
-  padding: 0;
-}
-
-.welcome-steps li {
-  padding: 0.75rem 0;
-  padding-left: 2rem;
-  position: relative;
-  border-left: 3px solid #e0f7fa;
-  margin-bottom: 0.5rem;
-}
-
-.welcome-steps li::before {
-  content: attr(data-step);
-  position: absolute;
-  left: -1.5rem;
-  top: 0.5rem;
-  background: var(--primary);
-  color: white;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 0.875rem;
-}
-
-.welcome-buttons {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 1.5rem;
-}
-
-.welcome-buttons button {
-  flex: 1;
-}
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
@@ -490,6 +428,7 @@ input:focus-visible {
     transform: translateY(20px);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
