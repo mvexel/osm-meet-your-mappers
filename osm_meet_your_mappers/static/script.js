@@ -283,13 +283,13 @@ const utils = {
   // Get bbox or polygon from URL parameters
   getBboxFromUrl: () => {
     const url = new URL(window.location);
-    
+
     // Check for polygon first
     const polygonHash = url.searchParams.get('polygon');
     if (polygonHash) {
       const coords = utils.unhashCoordinates(polygonHash);
       if (!coords) return null;
-      
+
       // Reconstruct WKT polygon
       const wktCoords = coords.map(c => c.join(' ')).join(',');
       return {
@@ -443,7 +443,7 @@ const ui = {
 const dataHandler = {
   async fetchMappers(bbox) {
     const params = new URLSearchParams();
-    
+
     if (bbox.polygon) {
       params.set('polygon', bbox.polygon);
     } else {
@@ -452,7 +452,7 @@ const dataHandler = {
       params.set('min_lat', bbox.minLat);
       params.set('max_lat', bbox.maxLat);
     }
-    
+
     const response = await fetch(`/mappers/?${params}`);
     return response.json();
   },
@@ -464,14 +464,14 @@ const dataHandler = {
       // Clear filter when displaying new data
       elements.filter.input.value = "";
     }
-    
+
     const hasData = data.length > 0;
     state.hasVisibleResults = hasData;
     elements.export.container.style.display = hasData ? "block" : "none";
 
     // Show the filter container
     elements.filter.container.style.display = hasData ? "block" : "none";
-    
+
     // Clear previous results
     elements.results.innerHTML = "";
 
@@ -645,7 +645,7 @@ const dataHandler = {
     if (data.length > maxRows) {
       const notice = document.createElement("div");
       notice.className = "truncation-notice";
-      
+
       if (elements.filter.input.value.trim()) {
         // When filtering
         notice.textContent = `Showing ${Math.min(maxRows, data.length)} of ${data.length} matching mappers. Download the CSV file to see all results!`;
@@ -653,7 +653,7 @@ const dataHandler = {
         // Normal case (no filter)
         notice.textContent = `Showing only the first ${maxRows} of ${data.length} mappers. Download the CSV file to see all mappers!`;
       }
-      
+
       elements.results.appendChild(notice);
     }
 
@@ -795,7 +795,7 @@ function initializeMap() {
     options: {
       position: 'topleft'
     },
-    onAdd: function(map) {
+    onAdd: function (map) {
       const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
       const button = L.DomUtil.create('a', '', container);
       button.innerHTML = '⊙';
@@ -811,19 +811,19 @@ function initializeMap() {
       button.style.display = 'block';
       button.style.textDecoration = 'none';
       button.style.color = '#333';
-      
-      L.DomEvent.on(button, 'click', function(e) {
+
+      L.DomEvent.on(button, 'click', function (e) {
         L.DomEvent.preventDefault(e);
         if (navigator.geolocation) {
           updateStatus('Getting your location...');
           navigator.geolocation.getCurrentPosition(
-            function(position) {
+            function (position) {
               const lat = position.coords.latitude;
               const lng = position.coords.longitude;
               map.setView([lat, lng], 13);
               updateStatus('Location found!');
             },
-            function(error) {
+            function (error) {
               let message = 'Location access denied or unavailable.';
               if (error.code === error.PERMISSION_DENIED) {
                 message = 'Location access denied. Please enable location services.';
@@ -844,11 +844,11 @@ function initializeMap() {
           updateStatus('Geolocation is not supported by this browser.');
         }
       });
-      
+
       return container;
     }
   });
-  
+
   map.addControl(new GeolocationControl());
 
   // group to hold box
@@ -868,21 +868,21 @@ function initializeMap() {
           const [lng, lat] = pair.split(' ').map(Number);
           return [lat, lng];
         });
-        
+
       const layer = L.polygon(coords, {
         color: "#ff0000",
         weight: 2,
         fillOpacity: 0.2
       });
       drawnItems.addLayer(layer);
-        
+
       // Set the bbox in state
       state.currentBbox = urlBbox;
       state.urlUpdated = true;
-        
+
       // Zoom to polygon bounds
       map.fitBounds(layer.getBounds());
-        
+
       updateStatus(
         "✓ Polygon loaded from URL!",
         'Click "Meet My Mappers" to find mappers in this area',
@@ -1016,7 +1016,7 @@ function initializeMap() {
         polygon: `POLYGON((${coords},${firstPoint}))`
       };
     }
-    
+
     if (bbox) {
       state.currentBbox = bbox;
 
@@ -1218,21 +1218,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!state.currentData) return;
 
     const searchTerm = elements.filter.input.value.toLowerCase();
-    
+
     if (searchTerm === "") {
       // If no filter, just display the original table with pagination
       dataHandler.displayMappers(state.currentData);
       return;
     }
-    
+
     // Filter the full dataset
-    const filteredData = state.currentData.filter(item => 
+    const filteredData = state.currentData.filter(item =>
       item.username.toLowerCase().includes(searchTerm)
     );
-    
+
     // Display the filtered data
     dataHandler.displayMappers(filteredData, true);
-    
+
     // Update status to show filter results
     updateStatus(`Found ${filteredData.length} mappers matching "${searchTerm}"`);
   }
@@ -1254,14 +1254,14 @@ document.addEventListener("DOMContentLoaded", async () => {
           credentials: "include",
         });
         state.osm = null;
-        
+
         // Clear the table and reset UI elements
         elements.results.innerHTML = "";
         elements.filter.container.style.display = "none";
         elements.export.container.style.display = "none";
         state.currentData = null;
         state.hasVisibleResults = false;
-        
+
         updateAuthUI();
         updateStatus("Successfully logged out", null, 'info');
       } catch (error) {
@@ -1291,7 +1291,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     state.currentData = null;
     state.hasVisibleResults = false;
     drawnItems.clearLayers();
-    
+
     updateButtonHints();
 
     // Check for bbox in URL
@@ -1342,7 +1342,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Share button functionality
   function handleShare() {
     if (!state.currentBbox) return;
-    
+
     try {
       navigator.clipboard.writeText(window.location.href).then(() => {
         showToast('Link copied to clipboard!');
@@ -1369,7 +1369,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   elements.export.button.addEventListener("click", () =>
     dataHandler.exportToCsv()
   );
-  
+
   // Attach the share button listener
   elements.share.button.addEventListener("click", handleShare);
 
@@ -1380,16 +1380,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     state.currentData = null;
     state.urlUpdated = false;
     state.hasVisibleResults = false;
-    
+
     // Clear map
     drawnItems.clearLayers();
-    
+
     // Clear table and UI elements
     elements.results.innerHTML = "";
     elements.filter.input.value = "";
     elements.filter.container.style.display = "none";
     elements.export.container.style.display = "none";
-    
+
     // Clear URL parameters
     const url = new URL(window.location);
     url.searchParams.delete(CONFIG.URL_PARAM_NAMES.MIN_LAT);
@@ -1398,7 +1398,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     url.searchParams.delete(CONFIG.URL_PARAM_NAMES.MAX_LON);
     url.searchParams.delete('polygon');
     window.history.pushState({}, "", url);
-    
+
     updateStatus(
       "✓ Cleared all selections",
       'Navigate the map and draw a new area to start over',
