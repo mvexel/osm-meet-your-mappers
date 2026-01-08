@@ -97,8 +97,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **psycopg2-binary** upgraded from `2.9.9` to `2.9.10`.
 - Minor upgrades merged via Dependabot for `aiofiles`, `black`, `pytest-cov`, and other packages.
 
-[1.0.7]: https://github.com/your-repo/compare/v1.0.6...v1.0.7
-
  ## [1.0.6] - 2025-02-24
 
  ### Added
@@ -194,8 +192,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Fixed spatial query implementation
  - Corrected HTML formatting in documentation
  - Fixed map container layout issues
-
-[Unreleased]: https://github.com/yourusername/yourrepo/compare/v1.0.3...HEAD
-[v1.0.3]: https://github.com/yourusername/yourrepo/compare/v1.0.2...v1.0.3
-[v1.0.2]: https://github.com/yourusername/yourrepo/tree/v1.0.2
-[v1.0.0]: https://github.com/yourusername/yourrepo/tree/v1.0.0
